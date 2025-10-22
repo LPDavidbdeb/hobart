@@ -106,3 +106,5 @@ dmypy.json
 
 # IDE directories
 .idea/
+
+Hobart/settings/local.py
