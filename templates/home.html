@@ -1,0 +1,19 @@
+{% extends 'base.html' %}
+{% load django_bootstrap5 %}
+
+{% block content %}
+  {% if user.is_authenticated %}
+    <h1>Welcome to the home page!</h1>
+    <form action="{% url 'logout' %}" method="post">
+        {% csrf_token %}
+        {% bootstrap_button "Logout" button_type="submit" button_class="btn-primary" %}
+    </form>
+  {% else %}
+    <h2>Login</h2>
+    <form method="post" action="{% url 'home' %}" class="form">
+        {% csrf_token %}
+        {% bootstrap_form form %}
+        {% bootstrap_button "Login" button_type="submit" button_class="btn-primary" %}
+    </form>
+  {% endif %}
+{% endblock %}
