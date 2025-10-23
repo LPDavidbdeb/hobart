@@ -1,0 +1,38 @@
+{% extends 'base.html' %}
+{% load django_bootstrap5 %}
+
+{% block title %}Upload Dimension Data{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+    <h1 class="mb-4">Upload Dimension Data</h1>
+    <p class="lead">Upload a CSV file to populate the code dimension tables (Industry, Customer Type, etc.).</p>
+    <hr>
+
+    {% bootstrap_messages %}
+
+    <form method="post" enctype="multipart/form-data" class="card p-4 shadow-sm">
+        {% csrf_token %}
+        
+        <div class="mb-3">
+            <label class="form-label">{{ form.dimension_type.label }}</label>
+            <div>
+            {% for radio in form.dimension_type %}
+                <div class="form-check form-check-inline">
+                    {{ radio.tag }}
+                    <label class="form-check-label" for="{{ radio.id_for_label }}">{{ radio.choice_label }}</label>
+                </div>
+            {% endfor %}
+            </div>
+        </div>
+
+        <div class="mb-3">
+            <label for="{{ form.csv_file.id_for_label }}" class="form-label">{{ form.csv_file.label }}</label>
+            {{ form.csv_file }}
+            <small class="form-text text-muted">{{ form.csv_file.help_text }}</small>
+        </div>
+
+        <button type="submit" class="btn btn-primary mt-3">Upload File</button>
+    </form>
+</div>
+{% endblock %}

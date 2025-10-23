@@ -1,0 +1,14 @@
+{% for employee in employees %}
+<tr>
+    <td>{{ employee.user.first_name }}</td>
+    <td>{{ employee.user.last_name }}</td>
+    <td>{{ employee.get_role_display }}</td>
+    <td>
+        <a href="{% url 'employees:employee_detail' employee.pk %}" class="btn btn-sm btn-info">View Details</a>
+    </td>
+</tr>
+{% empty %}
+<tr>
+    <td colspan="4" class="text-center">No employees found matching your search.</td>
+</tr>
+{% endfor %}

@@ -1,0 +1,62 @@
+{% extends 'base.html' %}
+{% load django_bootstrap5 %}
+
+{% block title %}Client Group List{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1>Client Group Management</h1>
+        <a href="{% url 'client:clientgroup_create' %}" class="btn btn-primary">Add New Client Group</a>
+    </div>
+
+    <!-- Live Search Input -->
+    <div class="mb-4">
+        <input type="text" id="clientgroup-search-input" class="form-control" placeholder="Start typing to filter by name or code...">
+    </div>
+
+    <!-- Main Client Group Table -->
+    <div class="table-responsive">
+        <table class="table table-striped table-hover">
+            <thead class="table-light">
+                <tr>
+                    <th>Name</th>
+                    <th>Code</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody id="clientgroup-table-body">
+                {# The initial table rows are loaded from the partial template #}
+                {% include 'client/_clientgroup_table_rows.html' with client_groups=client_groups %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{{ block.super }}
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+
+<script>
+$(document).ready(function() {
+    let searchTimeout;
+
+    $('#clientgroup-search-input').on('keyup', function() {
+        const query = $(this).val();
+        clearTimeout(searchTimeout);
+
+        searchTimeout = setTimeout(function() {
+            $.ajax({
+                url: "{% url 'client:group_search_filter_api' %}",
+                data: { 'q': query },
+                dataType: 'json',
+                success: function(data) {
+                    $('#clientgroup-table-body').html(data.html);
+                }
+            });
+        }, 300); // Wait 300ms after typing
+    });
+});
+</script>
+{% endblock %}

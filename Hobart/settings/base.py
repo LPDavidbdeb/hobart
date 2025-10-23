@@ -28,6 +28,8 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'django_bootstrap5',
     'users',
+    'employees',
+    'client',  # Added the new client app
 ]
 
 MIDDLEWARE = [

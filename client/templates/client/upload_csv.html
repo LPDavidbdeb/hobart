@@ -1,0 +1,20 @@
+{% extends 'base.html' %}
+{% load django_bootstrap5 %}
+
+{% block title %}Upload Client Group CSV{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+    <h1 class="mb-4">Upload Client Group Data</h1>
+    <p class="lead">Upload a CSV file to create or update client group records.</p>
+    <hr>
+
+    {% bootstrap_messages %}
+
+    <form method="post" enctype="multipart/form-data" class="card p-4 shadow-sm">
+        {% csrf_token %}
+        {% bootstrap_form form %}
+        <button type="submit" class="btn btn-primary mt-3">Upload File</button>
+    </form>
+</div>
+{% endblock %}

@@ -1,0 +1,131 @@
+{% extends 'base.html' %}
+{% load django_bootstrap5 %}
+
+{% block title %}{{ client_group.name }}{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+    <div class="card shadow-sm mb-4">
+        <div class="card-header bg-light">
+            <h1 class="mb-0">Client Group Details</h1>
+        </div>
+        <div class="card-body">
+            <div id="status-message" class="alert" style="display: none;" role="alert"></div>
+
+            <table class="table table-bordered">
+                <tbody>
+                    <tr>
+                        <th style="width: 25%;">Name</th>
+                        <td>
+                            {% if user.is_superuser %}
+                                <input type="text" class="form-control editable-field" 
+                                       data-field="name" 
+                                       data-pk="{{ client_group.pk }}" 
+                                       value="{{ client_group.name }}">
+                            {% else %}
+                                {{ client_group.name }}
+                            {% endif %}
+                        </td>
+                    </tr>
+                    <tr>
+                        <th>Code</th>
+                        <td>{{ client_group.code }}</td>
+                    </tr>
+                </tbody>
+            </table>
+            <a href="{% url 'client:clientgroup_list' %}" class="btn btn-secondary">Back to Client Group List</a>
+        </div>
+    </div>
+
+    <!-- New Card for Related Clients -->
+    <div class="card shadow-sm">
+        <div class="card-header">
+            <h2 class="h5 mb-0">Associated Client Sites</h2>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-striped table-hover mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Account #</th>
+                            <th>Name</th>
+                            <th>Address</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for client in related_clients %}
+                        <tr>
+                            <td>{{ client.account_number }}</td>
+                            <td>{{ client.name }}</td>
+                            <td>{{ client.address1 }}</td>
+                            <td>
+                                <a href="{% url 'client:client_detail' client.pk %}" class="btn btn-sm btn-outline-primary">View</a>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="4" class="text-center p-4">No individual client sites are associated with this group.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{{ block.super }}
+{% if user.is_superuser %}
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script>
+$(document).ready(function() {
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+    const csrftoken = getCookie('csrftoken');
+
+    $('.editable-field').on('blur', function() {
+        const field = $(this).data('field');
+        const pk = $(this).data('pk');
+        const value = $(this).val();
+        const statusDiv = $('#status-message');
+
+        $.ajax({
+            url: "{% url 'client:group_update_field_api' %}",
+            type: 'POST',
+            headers: {
+                'X-CSRFToken': csrftoken
+            },
+            contentType: 'application/json',
+            data: JSON.stringify({ pk: pk, field: field, value: value }),
+            success: function(data) {
+                if (data.status === 'success') {
+                    statusDiv.text('Saved successfully!').removeClass('alert-danger').addClass('alert-success').fadeIn().delay(2000).fadeOut();
+                } else {
+                    statusDiv.text('Error: ' + data.message).removeClass('alert-success').addClass('alert-danger').fadeIn().delay(5000).fadeOut();
+                }
+            },
+            error: function(xhr, errmsg, err) {
+                console.error(xhr.status + ": " + xhr.responseText);
+                statusDiv.text('An unexpected error occurred. See console for details.').removeClass('alert-success').addClass('alert-danger').fadeIn().delay(5000).fadeOut();
+            }
+        });
+    });
+});
+</script>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,29 @@
+{% extends 'base.html' %}
+{% load django_bootstrap5 %}
+
+{% block title %}Client: {{ client.account_number }}{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+    <div class="card shadow-sm">
+        <div class="card-header bg-light">
+            <h1 class="mb-0">Client Details: {{ client.account_number }}</h1>
+        </div>
+        <div class="card-body">
+            <table class="table table-bordered">
+                <tbody>
+                    <tr><th style="width: 25%;">Client Group</th><td>{{ client.client_group.name }}</td></tr>
+                    <tr><th>Address 1</th><td>{{ client.address1 }}</td></tr>
+                    <tr><th>Address 2</th><td>{{ client.address2 }}</td></tr>
+                    <tr><th>Postal Code</th><td>{{ client.postal_code }}</td></tr>
+                    <tr><th>Territory</th><td>{{ client.territory.code|default:"---" }}</td></tr>
+                    <tr><th>Industry Code</th><td>{{ client.industry_code.code|default:"---" }}</td></tr>
+                    <tr><th>Customer Type Code</th><td>{{ client.customer_type_code.code|default:"---" }}</td></tr>
+                    <tr><th>Industry Sub-Code</th><td>{{ client.industry_sub_code.code|default:"---" }}</td></tr>
+                </tbody>
+            </table>
+            <a href="{% url 'client:client_list' %}" class="btn btn-secondary">Back to Client List</a>
+        </div>
+    </div>
+</div>
+{% endblock %}

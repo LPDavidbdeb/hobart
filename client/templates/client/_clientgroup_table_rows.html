@@ -1,0 +1,13 @@
+{% for group in client_groups %}
+<tr>
+    <td>{{ group.name }}</td>
+    <td>{{ group.code }}</td>
+    <td>
+        <a href="{% url 'client:clientgroup_detail' group.pk %}" class="btn btn-sm btn-info">View Details</a>
+    </td>
+</tr>
+{% empty %}
+<tr>
+    <td colspan="3" class="text-center">No client groups found matching your search.</td>
+</tr>
+{% endfor %}

@@ -11,8 +11,20 @@
                     <a class="nav-link" href="{% url 'personalized_home' %}">Home</a>
                 </li>
                 {% if user.is_superuser %}
-                <li class="nav-item">
-                    <a class="nav-link" href="{% url 'users:user_list' %}">Users</a>
+                <li class="nav-item dropdown">
+                    <a class="nav-link dropdown-toggle" href="#" id="navbarDropdownManagement" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                        Management
+                    </a>
+                    <ul class="dropdown-menu" aria-labelledby="navbarDropdownManagement">
+                        <li><a class="dropdown-item" href="{% url 'employees:employee_list' %}">Employee List</a></li>
+                        <li><a class="dropdown-item" href="{% url 'client:client_list' %}">Client List</a></li>
+                        <li><a class="dropdown-item" href="{% url 'client:clientgroup_list' %}">Client Group List</a></li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li><a class="dropdown-item" href="{% url 'employees:upload_csv' %}">Upload Employee CSV</a></li>
+                        <li><a class="dropdown-item" href="{% url 'client:upload_group_csv' %}">Upload Client Group CSV</a></li>
+                        <li><a class="dropdown-item" href="{% url 'client:upload_dimension' %}">Upload Dimension CSV</a></li>
+                        <li><a class="dropdown-item" href="{% url 'client:upload_client' %}">Upload Main Client CSV</a></li>
+                    </ul>
                 </li>
                 {% endif %}
             </ul>

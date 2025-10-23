@@ -1,7 +1,6 @@
 from django.urls import path
 from .views import (
     UserCreateView,
-    UserListView,
     UserDetailView,
     UserUpdateView,
     UserDeleteView,
@@ -10,7 +9,7 @@ from .views import (
 app_name = 'users'
 
 urlpatterns = [
-    path('', UserListView.as_view(), name='user_list'),
+    # The user_list URL has been removed. The main list is now in the 'employees' app.
     path('create/', UserCreateView.as_view(), name='user_create'),
     path('<int:pk>/', UserDetailView.as_view(), name='user_detail'),
     path('<int:pk>/update/', UserUpdateView.as_view(), name='user_update'),

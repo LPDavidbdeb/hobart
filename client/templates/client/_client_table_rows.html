@@ -1,0 +1,15 @@
+{% for client in clients %}
+<tr>
+    <td>{{ client.name }}</td>
+    <td>{{ client.client_group.name }}</td>
+    <td>{{ client.address1 }}</td>
+    <td>{{ client.territory.code|default:"---" }}</td>
+    <td>
+        <a href="{% url 'client:client_detail' client.pk %}" class="btn btn-sm btn-info">View Details</a>
+    </td>
+</tr>
+{% empty %}
+<tr>
+    <td colspan="5" class="text-center">No clients found matching your search.</td>
+</tr>
+{% endfor %}

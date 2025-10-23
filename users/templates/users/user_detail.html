@@ -5,5 +5,5 @@
   <p>Email: {{ object.email }}</p>
   <a href="{% url 'users:user_update' object.pk %}" class="btn btn-primary">Edit</a>
   <a href="{% url 'users:user_delete' object.pk %}" class="btn btn-danger">Delete</a>
-  <a href="{% url 'users:user_list' %}" class="btn btn-secondary">Back to List</a>
+  <a href="{% url 'employees:employee_list' %}" class="btn btn-secondary">Back to Employee List</a>
 {% endblock %}
