@@ -1,13 +1,7 @@
 # employees/admin.py
 
 from django.contrib import admin
-from .models import Territory, EmployeeProfile
-
-
-@admin.register(Territory)
-class TerritoryAdmin(admin.ModelAdmin):
-    list_display = ('name', 'description')
-    search_fields = ('name',)
+from .models import EmployeeProfile
 
 
 @admin.register(EmployeeProfile)
@@ -16,8 +10,3 @@ class EmployeeProfileAdmin(admin.ModelAdmin):
     list_filter = ('role', 'territories')
     search_fields = ('user__username', 'user__first_name', 'user__last_name')
     raw_id_fields = ('user', 'reports_to')  # Makes selecting users/managers easier
-
-
-from django.contrib import admin
-
-# Register your models here.

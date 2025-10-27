@@ -5,71 +5,61 @@
 
 {% block content %}
 <div class="container mt-5">
-    <div class="card shadow-sm">
+    <div class="card shadow-sm mb-4">
         <div class="card-header bg-light">
             <h1 class="mb-0">Employee Details</h1>
         </div>
         <div class="card-body">
-            <div id="status-message" class="alert alert-success" style="display: none;" role="alert"></div>
-
             <table class="table table-bordered">
                 <tbody>
-                    <tr>
-                        <th style="width: 25%;">First Name</th>
-                        <td>
-                            {% if user.is_superuser %}
-                                <input type="text" class="form-control editable-field" 
-                                       data-field="first_name" 
-                                       data-pk="{{ employee.pk }}" 
-                                       value="{{ employee.user.first_name }}">
-                            {% else %}
-                                {{ employee.user.first_name }}
-                            {% endif %}
-                        </td>
-                    </tr>
-                    <tr>
-                        <th>Last Name</th>
-                        <td>
-                            {% if user.is_superuser %}
-                                <input type="text" class="form-control editable-field" 
-                                       data-field="last_name" 
-                                       data-pk="{{ employee.pk }}" 
-                                       value="{{ employee.user.last_name }}">
-                            {% else %}
-                                {{ employee.user.last_name }}
-                            {% endif %}
-                        </td>
-                    </tr>
-                    <tr>
-                        <th>Immediate Superior</th>
-                        <td>
-                            {% if user.is_superuser %}
-                                <select class="form-select editable-field" 
-                                        data-field="reports_to" 
-                                        data-pk="{{ employee.pk }}">
-                                    <option value="">--- None ---</option>
-                                    {% for supervisor in supervisors %}
-                                        <option value="{{ supervisor.pk }}" {% if employee.reports_to.pk == supervisor.pk %}selected{% endif %}>
-                                            {{ supervisor.user.get_full_name }}
-                                        </option>
-                                    {% endfor %}
-                                </select>
-                            {% else %}
-                                {{ employee.reports_to.user.get_full_name|default:"---" }}
-                            {% endif %}
-                        </td>
-                    </tr>
-                    <tr>
-                        <th>Role</th>
-                        <td>{{ employee.get_role_display }}</td>
-                    </tr>
-                    <tr>
-                        <th>Employee Code</th>
-                        <td>{{ employee.code }}</td>
-                    </tr>
+                    <tr><th style="width: 25%;">First Name</th><td>{{ employee.user.first_name }}</td></tr>
+                    <tr><th>Last Name</th><td>{{ employee.user.last_name }}</td></tr>
+                    <tr><th>Immediate Superior</th><td>{{ employee.reports_to.user.get_full_name|default:"---" }}</td></tr>
+                    <tr><th>Role</th><td>{{ employee.get_role_display }}</td></tr>
+                    <tr><th>Employee Code</th><td>{{ employee.code }}</td></tr>
                 </tbody>
             </table>
-            <a href="{% url 'employees:employee_list' %}" class="btn btn-secondary">Back to Employee List</a>
+            <a href="{% url 'employees:employee_list' %}" class="btn btn-secondary">Back to List</a>
+        </div>
+    </div>
+
+    <!-- Address Management Card -->
+    <div class="card shadow-sm">
+        <div class="card-header">
+            <h2 class="mb-0">Address Management</h2>
+        </div>
+        <div class="card-body">
+            <div id="address-status-message" class="alert" style="display: none;" role="alert"></div>
+            
+            <div id="address-header-container" class="d-flex align-items-center mb-2">
+                <h5 class="mb-0">Current Address</h5>
+                {% if employee.address_status %}
+                    <span class="badge {{ employee.address_status.badge_class }} ms-2">{{ employee.address_status.name }}</span>
+                    {% if employee.address_status.name == 'INCOMPLETE' and employee.address %}
+                        {% with reasons=employee.address.get_degeneracy_reasons %}
+                            {% if reasons %}
+                                <small class="ms-2 text-muted"> (Missing: {{ reasons|join:", " }})</small>
+                            {% endif %}
+                        {% endwith %}
+                    {% endif %}
+                {% endif %}
+            </div>
+
+            <div id="current-address-display" class="mb-3 p-2 bg-light rounded">
+                {% if employee.address %}
+                    <p class="mb-0">{{ employee.address.formatted }}</p>
+                {% else %}
+                    <p class="mb-0 text-muted">No address assigned.</p>
+                {% endif %}
+            </div>
+
+            <hr>
+
+            <h5>Search for a New Address</h5>
+            <div class="position-relative">
+                <input type="text" id="address-autocomplete-input" class="form-control" placeholder="Start typing an address...">
+                <div id="address-autocomplete-results" class="list-group position-absolute w-100" style="z-index: 1000;"></div>
+            </div>
         </div>
     </div>
 </div>
@@ -77,10 +67,14 @@
 
 {% block scripts %}
 {{ block.super }}
-{% if user.is_superuser %}
 <script>
-$(document).ready(function() {
-    // Function to get CSRF token from cookies
+document.addEventListener('DOMContentLoaded', function() {
+    const searchInput = document.getElementById('address-autocomplete-input');
+    const resultsDiv = document.getElementById('address-autocomplete-results');
+    const statusDiv = document.getElementById('address-status-message');
+    const employeePk = "{{ employee.pk }}";
+    let debounceTimeout;
+
     function getCookie(name) {
         let cookieValue = null;
         if (document.cookie && document.cookie !== '') {
@@ -97,39 +91,94 @@ $(document).ready(function() {
     }
     const csrftoken = getCookie('csrftoken');
 
-    $('.editable-field').on('blur', function() {
-        const field = $(this).data('field');
-        const pk = $(this).data('pk');
-        const value = $(this).val();
+    searchInput.addEventListener('keyup', function() {
+        clearTimeout(debounceTimeout);
+        const query = searchInput.value;
+        if (query.length < 3) { resultsDiv.innerHTML = ''; return; }
 
-        fetch("{% url 'employees:update_employee_field_api' %}", {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRFToken': csrftoken
-            },
-            body: JSON.stringify({
-                pk: pk,
-                field: field,
-                value: value
+        debounceTimeout = setTimeout(() => {
+            fetch(`{% url "address:search_address_api" %}?query=${encodeURIComponent(query)}`)
+                .then(response => response.json())
+                .then(data => {
+                    resultsDiv.innerHTML = '';
+                    if (data.suggestions && data.suggestions.length > 0) {
+                        data.suggestions.forEach(suggestion => {
+                            const item = document.createElement('a');
+                            item.href = '#';
+                            item.className = 'list-group-item list-group-item-action';
+                            item.innerHTML = `${suggestion.formatted_address} <span class="badge bg-secondary">${suggestion.source}</span>`;
+                            item.dataset.placeId = suggestion.place_id;
+                            resultsDiv.appendChild(item);
+                        });
+                    }
+                });
+        }, 300);
+    });
+
+    resultsDiv.addEventListener('click', function(e) {
+        e.preventDefault();
+        const target = e.target.closest('a');
+        if (target) {
+            const placeId = target.dataset.placeId;
+
+            resultsDiv.innerHTML = '';
+            searchInput.value = '';
+
+            const payload = {
+                employee_pk: employeePk,
+                place_id: placeId
+            };
+
+            fetch(`{% url "address:set_employee_address_api" %}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrftoken
+                },
+                body: JSON.stringify(payload)
             })
-        })
-        .then(response => response.json())
-        .then(data => {
-            const statusDiv = $('#status-message');
-            if (data.status === 'success') {
-                statusDiv.text('Saved successfully!').removeClass('alert-danger').addClass('alert-success').fadeIn().delay(2000).fadeOut();
-            } else {
-                statusDiv.text('Error: ' + data.message).removeClass('alert-success').addClass('alert-danger').fadeIn().delay(5000).fadeOut();
-            }
-        })
-        .catch(error => {
-            console.error('Error:', error);
-            const statusDiv = $('#status-message');
-            statusDiv.text('A network error occurred.').removeClass('alert-success').addClass('alert-danger').fadeIn().delay(5000).fadeOut();
-        });
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // --- Dynamic Update Logic ---
+                    const currentAddressDiv = document.getElementById('current-address-display');
+                    currentAddressDiv.innerHTML = `<p class="mb-0">${data.formatted_address}</p>`;
+
+                    const addressHeaderContainer = document.getElementById('address-header-container');
+                    let reasonsHTML = '';
+                    if (data.status.name === 'INCOMPLETE' && data.status.reasons.length > 0) {
+                        reasonsHTML = `<small class="ms-2 text-muted"> (Missing: ${data.status.reasons.join(", ")})</small>`;
+                    }
+                    addressHeaderContainer.innerHTML = `
+                        <h5 class="mb-0">Current Address</h5>
+                        <span class="badge ${data.status.badge_class} ms-2">${data.status.name}</span>
+                        ${reasonsHTML}
+                    `;
+
+                    statusDiv.className = 'alert alert-success';
+                    statusDiv.textContent = 'Address updated successfully!';
+                    statusDiv.style.display = 'block';
+                } else {
+                    statusDiv.className = 'alert alert-danger';
+                    statusDiv.textContent = `Error: ${data.error}`;
+                    statusDiv.style.display = 'block';
+                }
+                setTimeout(() => { statusDiv.style.display = 'none'; }, 5000);
+            })
+            .catch(error => {
+                statusDiv.className = 'alert alert-danger';
+                statusDiv.textContent = 'A network error occurred.';
+                statusDiv.style.display = 'block';
+                setTimeout(() => { statusDiv.style.display = 'none'; }, 5000);
+            });
+        }
+    });
+
+    document.addEventListener('click', function(e) {
+        if (!searchInput.contains(e.target)) {
+            resultsDiv.innerHTML = '';
+        }
     });
 });
 </script>
-{% endif %}
 {% endblock %}

@@ -1,0 +1,107 @@
+{% extends 'base.html' %}
+
+{% block title %}Address Health Dashboard{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="mb-0">Address Health Dashboard</h1>
+        <form method="post">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-lg btn-success">Run New Address Validation</button>
+        </form>
+    </div>
+
+    <p class="text-muted">This dashboard shows the historical trend of address data quality. Each point represents a validation run, allowing you to track improvements over time.</p>
+
+    <div class="card shadow-sm">
+        <div class="card-header">
+            <h4 class="mb-0">Address Quality Trend</h4>
+        </div>
+        <div class="card-body">
+            <div id="d3-chart-container"></div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{{ block.super }}
+<script src="https://d3js.org/d3.v7.min.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const rawData = JSON.parse('{{ logs_json|escapejs }}');
+    if (rawData.length === 0) {
+        document.getElementById('d3-chart-container').innerHTML = '<div class="alert alert-info">No validation data to display. Run a validation to see the chart.</div>';
+        return;
+    }
+
+    const data = rawData.map(d => ({
+        date: new Date(d.timestamp),
+        clients_complete: +d.clients_complete,
+        clients_incomplete: +d.clients_incomplete,
+        employees_complete: +d.employees_complete,
+        employees_incomplete: +d.employees_incomplete,
+    }));
+
+    // --- D3 Chart Setup ---
+    const margin = {top: 20, right: 120, bottom: 50, left: 60},
+          width = 960 - margin.left - margin.right,
+          height = 500 - margin.top - margin.bottom;
+
+    const svg = d3.select("#d3-chart-container")
+      .append("svg")
+        .attr("width", width + margin.left + margin.right)
+        .attr("height", height + margin.top + margin.bottom)
+      .append("g")
+        .attr("transform", `translate(${margin.left},${margin.top})`);
+
+    // --- Scales ---
+    const x = d3.scaleTime()
+      .domain(d3.extent(data, d => d.date))
+      .range([0, width]);
+
+    const y = d3.scaleLinear()
+      .domain([0, d3.max(data, d => Math.max(d.clients_complete, d.clients_incomplete, d.employees_complete, d.employees_incomplete))])
+      .range([height, 0]);
+
+    // --- Axes ---
+    svg.append("g")
+      .attr("transform", `translate(0,${height})`)
+      .call(d3.axisBottom(x));
+
+    svg.append("g")
+      .call(d3.axisLeft(y));
+
+    // --- Lines ---
+    const line = (xVal, yVal) => d3.line()
+        .x(d => x(d[xVal]))
+        .y(d => y(d[yVal]));
+
+    const lines = [
+        {name: "Clients Complete", key: "clients_complete", color: "#198754"},
+        {name: "Clients Incomplete", key: "clients_incomplete", color: "#ffc107"},
+        {name: "Employees Complete", key: "employees_complete", color: "#0dcaf0"},
+        {name: "Employees Incomplete", key: "employees_incomplete", color: "#dc3545"}
+    ];
+
+    lines.forEach(l => {
+        svg.append("path")
+          .datum(data)
+          .attr("fill", "none")
+          .attr("stroke", l.color)
+          .attr("stroke-width", 2.5)
+          .attr("d", line('date', l.key));
+    });
+
+    // --- Legend ---
+    const legend = svg.append("g")
+        .attr("transform", `translate(${width + 20}, 0)`);
+
+    lines.forEach((l, i) => {
+        legend.append("circle").attr("cx",0).attr("cy",i*25).attr("r", 6).style("fill", l.color)
+        legend.append("text").attr("x", 15).attr("y", i*25).text(l.name).style("font-size", "15px").attr("alignment-baseline","middle")
+    });
+});
+</script>
+{% endblock %}

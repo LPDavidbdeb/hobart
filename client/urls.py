@@ -9,6 +9,9 @@ urlpatterns = [
     path('detail/<int:pk>/', views.ClientDetailView.as_view(), name='client_detail'),
     path('api/client-search-filter/', views.client_search_and_filter_api, name='client_search_filter_api'),
 
+    # Address Validation
+    path('address-validation/', views.ClientAddressValidationListView.as_view(), name='address_validation_list'),
+
     # Client Group Views
     path('groups/', views.ClientGroupListView.as_view(), name='clientgroup_list'),
     path('groups/create/', views.ClientGroupCreateView.as_view(), name='clientgroup_create'),

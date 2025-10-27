@@ -12,18 +12,35 @@
                 </li>
                 {% if user.is_superuser %}
                 <li class="nav-item dropdown">
+                    <a class="nav-link dropdown-toggle" href="#" id="navbarDropdownEmployees" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                        Employees
+                    </a>
+                    <ul class="dropdown-menu" aria-labelledby="navbarDropdownEmployees">
+                        <li><a class="dropdown-item" href="{% url 'employees:director_list' %}">Director List</a></li>
+                        <li><a class="dropdown-item" href="{% url 'employees:manager_list' %}">Manager List</a></li>
+                        <li><a class="dropdown-item" href="{% url 'employees:technician_list' %}">Technician List</a></li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li><a class="dropdown-item" href="{% url 'employees:employee_list' %}">All Employee List</a></li>
+                    </ul>
+                </li>
+                <li class="nav-item dropdown">
                     <a class="nav-link dropdown-toggle" href="#" id="navbarDropdownManagement" role="button" data-bs-toggle="dropdown" aria-expanded="false">
                         Management
                     </a>
                     <ul class="dropdown-menu" aria-labelledby="navbarDropdownManagement">
-                        <li><a class="dropdown-item" href="{% url 'employees:employee_list' %}">Employee List</a></li>
+                        <li><a class="dropdown-item" href="{% url 'admin:index' %}">Admin Center</a></li>
                         <li><a class="dropdown-item" href="{% url 'client:client_list' %}">Client List</a></li>
                         <li><a class="dropdown-item" href="{% url 'client:clientgroup_list' %}">Client Group List</a></li>
                         <li><hr class="dropdown-divider"></li>
-                        <li><a class="dropdown-item" href="{% url 'employees:upload_csv' %}">Upload Employee CSV</a></li>
-                        <li><a class="dropdown-item" href="{% url 'client:upload_group_csv' %}">Upload Client Group CSV</a></li>
-                        <li><a class="dropdown-item" href="{% url 'client:upload_dimension' %}">Upload Dimension CSV</a></li>
-                        <li><a class="dropdown-item" href="{% url 'client:upload_client' %}">Upload Main Client CSV</a></li>
+                        <li><h6 class="dropdown-header">Data Quality</h6></li>
+                        <li><a class="dropdown-item" href="{% url 'client:address_validation_list' %}">Address Validation Queue</a></li>
+                        <li><a class="dropdown-item" href="{% url 'address:health_dashboard' %}">Address Health Dashboard</a></li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li><h6 class="dropdown-header">Upload CSV</h6></li>
+                        <li><a class="dropdown-item" href="{% url 'employees:upload_csv' %}">Upload Employees</a></li>
+                        <li><a class="dropdown-item" href="{% url 'client:upload_group_csv' %}">Upload Client Groups</a></li>
+                        <li><a class="dropdown-item" href="{% url 'client:upload_dimension' %}">Upload Dimensions</a></li>
+                        <li><a class="dropdown-item" href="{% url 'client:upload_client' %}">Upload Clients</a></li>
                     </ul>
                 </li>
                 {% endif %}

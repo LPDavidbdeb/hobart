@@ -1,0 +1,30 @@
+{% extends 'base.html' %}
+
+{% block title %}FAQ{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+    <h1 class="mb-4">Frequently Asked Questions (FAQ)</h1>
+
+    <div class="accordion" id="faqAccordion">
+        {% for faq in faqs %}
+        <div class="accordion-item">
+            <h2 class="accordion-header" id="heading-{{ faq.pk }}">
+                <button class="accordion-button {% if not forloop.first %}collapsed{% endif %}" type="button" data-bs-toggle="collapse" data-bs-target="#collapse-{{ faq.pk }}" aria-expanded="{% if forloop.first %}true{% else %}false{% endif %}" aria-controls="collapse-{{ faq.pk }}">
+                    {{ faq.question }}
+                </button>
+            </h2>
+            <div id="collapse-{{ faq.pk }}" class="accordion-collapse collapse {% if forloop.first %}show{% endif %}" aria-labelledby="heading-{{ faq.pk }}" data-bs-parent="#faqAccordion">
+                <div class="accordion-body">
+                    {{ faq.answer|linebreaks }}
+                </div>
+            </div>
+        </div>
+        {% empty %}
+        <div class="alert alert-warning" role="alert">
+            There are no FAQs to display at this time.
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}
