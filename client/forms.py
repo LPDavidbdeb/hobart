@@ -1,5 +1,5 @@
 from django import forms
-from .models import ClientGroup
+from .models import ClientGroup, Client
 
 class CsvUploadForm(forms.Form):
     csv_file = forms.FileField(
@@ -35,3 +35,24 @@ class ClientGroupForm(forms.ModelForm):
     class Meta:
         model = ClientGroup
         fields = ['code', 'name']
+
+class ClientAddressEditForm(forms.ModelForm):
+    """
+    Form for manually editing a client's original address fields (address1, address2, postal_code).
+    """
+    class Meta:
+        model = Client
+        fields = ['address1', 'address2', 'postal_code']
+        widgets = {
+            'address1': forms.TextInput(attrs={'class': 'form-control'}),
+            'address2': forms.TextInput(attrs={'class': 'form-control'}),
+            'postal_code': forms.TextInput(attrs={'class': 'form-control'}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Make fields required for data quality, but allow them to be empty if they were already empty
+        # This ensures that if a field was legitimately empty, it can remain so, but if it's being edited, it should be filled.
+        self.fields['address1'].required = True
+        self.fields['postal_code'].required = True
+

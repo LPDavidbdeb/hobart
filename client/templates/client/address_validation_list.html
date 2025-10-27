@@ -1,0 +1,43 @@
+{% extends 'base.html' %}
+
+{% block title %}Address Validation Queue{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+    <h1 class="mb-4">Address Validation Queue</h1>
+    <p class="text-muted">This page lists all clients whose assigned address is incomplete and likely needs manual correction. An address is considered incomplete if it is missing a street number, street name, city, or has an invalid postal code.</p>
+
+    <div class="table-responsive">
+        <table class="table table-striped table-bordered">
+            <thead class="table-dark">
+                <tr>
+                    <th>Client Name</th>
+                    <th>Original Address 1</th>
+                    <th>Original Address 2</th>
+                    <th class="table-warning">Problematic Formatted Address</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for client in clients %}
+                <tr>
+                    <td>{{ client.name }}</td>
+                    <td>{{ client.address1 }}</td>
+                    <td>{{ client.address2 }}</td>
+                    <td class="table-warning">{{ client.address.formatted|default:"N/A" }}</td>
+                    <td>
+                        <a href="{% url 'client:client_detail' pk=client.pk %}" class="btn btn-danger">Fix Address</a>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="5" class="text-center">No clients with degenerate addresses found. The queue is empty!</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    {% include '_pagination.html' %} {# Include pagination if the list is long #}
+</div>
+{% endblock %}

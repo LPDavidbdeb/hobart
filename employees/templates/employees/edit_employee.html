@@ -1,0 +1,27 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header">
+                    <h3>Edit Employee: {{ employee.user.get_full_name }}</h3>
+                    <p class="text-muted">Current Username: {{ employee.user.username }} | Current Code: {{ employee.code }}</p>
+                </div>
+                <div class="card-body">
+                    <p>Changing the first or last name will automatically regenerate the employee's username, email, and code.</p>
+                    <form method="post">
+                        {% csrf_token %}
+                        {{ form.as_p }}
+                        <div class="d-flex justify-content-end mt-3">
+                            <a href="{% url 'employees:manager_list' %}" class="btn btn-secondary me-2">Cancel</a>
+                            <button type="submit" class="btn btn-primary">Save Changes</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

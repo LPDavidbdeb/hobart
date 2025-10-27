@@ -2,7 +2,12 @@
 <tr>
     <td>{{ client.name }}</td>
     <td>{{ client.client_group.name }}</td>
-    <td>{{ client.address1 }}</td>
+    <td>{{ client.address.formatted|default:"---" }}</td>
+    <td>
+        {% if client.address_status %}
+            <span class="badge {{ client.address_status.badge_class }}">{{ client.address_status.name }}</span>
+        {% endif %}
+    </td>
     <td>{{ client.territory.code|default:"---" }}</td>
     <td>
         <a href="{% url 'client:client_detail' client.pk %}" class="btn btn-sm btn-info">View Details</a>
@@ -10,6 +15,6 @@
 </tr>
 {% empty %}
 <tr>
-    <td colspan="5" class="text-center">No clients found matching your search.</td>
+    <td colspan="6" class="text-center">No clients found matching your search.</td>
 </tr>
 {% endfor %}

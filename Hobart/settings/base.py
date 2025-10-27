@@ -16,6 +16,8 @@ load_dotenv()
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
+# --- Custom Settings ---
+GOOGLE_MAPS_API_KEY = os.getenv('GOOGLE_MAPS_API_KEY')
 
 # Application definition
 
@@ -26,10 +28,16 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+
     'django_bootstrap5',
+    'django_extensions',
+
     'users',
     'employees',
     'client',  # Added the new client app
+    'address', # Added the address app
+    'organization', # Added the organization app
+    'core',
 ]
 
 MIDDLEWARE = [

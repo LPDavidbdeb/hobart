@@ -4,11 +4,16 @@
     <td>{{ employee.user.last_name }}</td>
     <td>{{ employee.get_role_display }}</td>
     <td>
+        {% if employee.address_status %}
+            <span class="badge {{ employee.address_status.badge_class }}">{{ employee.address_status.name }}</span>
+        {% endif %}
+    </td>
+    <td>
         <a href="{% url 'employees:employee_detail' employee.pk %}" class="btn btn-sm btn-info">View Details</a>
     </td>
 </tr>
 {% empty %}
 <tr>
-    <td colspan="4" class="text-center">No employees found matching your search.</td>
+    <td colspan="5" class="text-center">No employees found matching your search.</td>
 </tr>
 {% endfor %}
