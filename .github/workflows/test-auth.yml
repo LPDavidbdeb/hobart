@@ -1,0 +1,30 @@
+name: Test Google Cloud Authentication
+
+on:
+  workflow_dispatch: # Allows you to run this workflow manually from the Actions tab
+
+jobs:
+  test-authentication:
+    runs-on: ubuntu-latest
+
+    # Add the permissions block
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Authenticate to Google Cloud
+      id: auth
+      uses: google-github-actions/auth@v2
+      with:
+        workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+        service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+    - name: Test gcloud command
+      run: |-
+        echo "Authentication successful!"
+        echo "Running gcloud command..."
+        gcloud projects list

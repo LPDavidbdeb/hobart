@@ -1,0 +1,11 @@
+.dockerignore
+Dockerfile
+.git
+.gitignore
+.idea
+.venv
+*.pyc
+*__pycache__
+datadump.json
+.env
+.env-postgres
