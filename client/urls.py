@@ -23,4 +23,7 @@ urlpatterns = [
     path('upload-group/', views.upload_client_group_view, name='upload_group_csv'),
     path('upload-dimension/', views.upload_dimension_view, name='upload_dimension'),
     path('upload-client/', views.upload_client_view, name='upload_client'),
+
+    # Map View
+    path('map/', views.ClientMapView.as_view(), name='client_map'),
 ]

@@ -5,7 +5,7 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
-from django.views.generic import ListView, DetailView, CreateView
+from django.views.generic import ListView, DetailView, CreateView, View
 from django.urls import reverse_lazy
 from django.http import JsonResponse
 from django.db.models import Q, Func, F, Value
@@ -127,6 +127,39 @@ class ClientGroupCreateView(CreateView):
     def form_valid(self, form):
         messages.success(self.request, "Client Group created successfully!")
         return super().form_valid(form)
+
+# --- Map View ---
+class ClientMapView(LoginRequiredMixin, UserPassesTestMixin, View):
+    template_name = 'client/client_map.html'
+
+    def test_func(self):
+        return is_admin_or_director(self.request.user)
+
+    def get(self, request, *args, **kwargs):
+        # Fetch clients that have a geocoded address with latitude and longitude
+        clients_with_coords = Client.objects.filter(
+            address__latitude__isnull=False,
+            address__longitude__isnull=False
+        ).select_related('address').values('name', 'address__latitude', 'address__longitude')
+
+        # Prepare data for JavaScript
+        client_locations = [
+            {
+                'name': client['name'],
+                'lat': float(client['address__latitude']),
+                'lng': float(client['address__longitude']),
+            }
+            for client in clients_with_coords
+        ]
+        
+        # Pass Google Maps API Key to the template
+        google_maps_api_key = os.environ.get('GOOGLE_MAPS_API_KEY')
+
+        context = {
+            'client_locations_json': json.dumps(client_locations),
+            'google_maps_api_key': google_maps_api_key,
+        }
+        return render(request, self.template_name, context)
 
 # --- APIs ---
 @login_required
