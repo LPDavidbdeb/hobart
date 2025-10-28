@@ -1,3 +1,4 @@
+import json
 from django.core.management.base import BaseCommand
 from address.models import Address
 from organization.models import Territory
@@ -15,26 +16,53 @@ class Command(BaseCommand):
         client_count = 0
 
         with transaction.atomic():
-            for address in Address.objects.filter(postal_code__isnull=False).iterator():
+            for address in Address.objects.filter(raw_response__isnull=False).iterator():
                 address_count += 1
+                
+                try:
+                    raw_data = address.raw_response
+                    # Corrected: address_components is directly under raw_data
+                    address_components = raw_data.get('address_components', [])
+                except AttributeError:
+                    self.stdout.write(self.style.WARNING(f"Skipping address {address.id} due to malformed raw_response structure (missing address_components)."))
+                    continue
+
+                province_name = None
+                region_name = None
+                city_name = None
+
+                for component in address_components:
+                    types = component.get('types', [])
+                    if 'administrative_area_level_1' in types: # Province
+                        province_name = component.get('long_name')
+                    elif 'administrative_area_level_2' in types: # Region/RCM
+                        region_name = component.get('long_name')
+                    elif 'locality' in types: # City
+                        city_name = component.get('long_name')
+                
                 territory_data = {
-                    'PROVINCE': address.administrative_area_level_1,
-                    'REGION': address.administrative_area_level_2,
-                    'CITY': address.locality,
+                    'PROVINCE': province_name,
+                    'REGION': region_name,
+                    'CITY': city_name,
                 }
 
                 primary_territory = None
 
-                for territory_type, territory_name in territory_data.items():
+                # Process in order of specificity (City, then Region, then Province)
+                for territory_type_key in ['CITY', 'REGION', 'PROVINCE']:
+                    territory_name = territory_data.get(territory_type_key)
                     if territory_name:
                         territory, created = Territory.objects.get_or_create(
                             name=territory_name,
-                            type=territory_type
+                            type=territory_type_key
                         )
                         if created:
                             territory_count += 1
+                        # The most specific one found will be the primary
                         primary_territory = territory
-                
+                        break # Assign only the most specific one found
+
+                # If a territory was found/created, find related clients and assign it.
                 if primary_territory:
                     clients_to_update = Client.objects.filter(address=address)
                     for client in clients_to_update:
