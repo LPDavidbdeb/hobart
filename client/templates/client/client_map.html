@@ -1,0 +1,52 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Client Map{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-3">
+    <h2 class="mb-3">Client Locations Map</h2>
+    <div id="map" style="height: 700px; width: 100%;"></div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    let map;
+    let markers = [];
+    const clientLocations = JSON.parse('{{ client_locations_json|escapejs }}');
+    const googleMapsApiKey = "{{ google_maps_api_key }}";
+
+    function initMap() {
+        map = new google.maps.Map(document.getElementById("map"), {
+            center: { lat: 45.5017, lng: -73.5673 }, // Default to Montreal
+            zoom: 8,
+        });
+
+        clientLocations.forEach(client => {
+            const marker = new google.maps.Marker({
+                position: { lat: client.lat, lng: client.lng },
+                map,
+                title: client.name,
+            });
+            markers.push(marker);
+
+            const infowindow = new google.maps.InfoWindow({
+                content: `<b>${client.name}</b><br>Lat: ${client.lat}<br>Lng: ${client.lng}`,
+            });
+
+            marker.addListener("click", () => {
+                infowindow.open(map, marker);
+            });
+        });
+
+        // Optionally, fit map to markers
+        if (markers.length > 0) {
+            const bounds = new google.maps.LatLngBounds();
+            markers.forEach(marker => bounds.extend(marker.getPosition()));
+            map.fitBounds(bounds);
+        }
+    }
+</script>
+<script async defer src="https://maps.googleapis.com/maps/api/js?key={{ google_maps_api_key }}&callback=initMap"></script>
+{% endblock %}
