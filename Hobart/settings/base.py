@@ -11,6 +11,8 @@ import os
 from dotenv import load_dotenv
 from pathlib import Path
 
+# Load environment variables from .env file.
+# This is safe for production as there will be no .env file.
 load_dotenv()
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -75,7 +77,7 @@ WSGI_APPLICATION = 'Hobart.wsgi.application'
 # Password validation
 # https://docs.djangoproject.com/en/5.2/ref/settings/#auth-password-validators
 
-AUTH_PASSWORD_VALIDATORS = [
+AUTH_PASSWORD_validators = [
     {
         'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',
     },

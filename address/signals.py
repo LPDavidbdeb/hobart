@@ -13,7 +13,7 @@ def update_related_address_statuses(sender, instance, **kwargs):
         status_name = "INCOMPLETE"
     else:
         status_name = "COMPLETE"
-    
+
     try:
         # Get the actual AddressStatus object from the database
         status_obj = AddressStatus.objects.get(name=status_name)

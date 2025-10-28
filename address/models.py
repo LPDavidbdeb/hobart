@@ -51,40 +51,55 @@ class Address(models.Model):
     """
     Stores a rich, structured address, abstracting Google's complexity.
     """
-    # --- Raw Component Fields ---
+    # --- Core Fields ---
     formatted = models.CharField(max_length=255, blank=True, null=True)
     place_id = models.CharField(max_length=255, unique=True, null=True, blank=True)
-    street_number = models.CharField(max_length=50, blank=True, null=True)
-    route = models.CharField(max_length=100, blank=True, null=True)  # Street name
-    locality = models.CharField(max_length=100, blank=True, null=True)  # Official city name
-    sublocality = models.CharField(max_length=100, blank=True, null=True) # Borough or neighborhood
-    administrative_area_level_3 = models.CharField(max_length=100, blank=True, null=True) # e.g., Leamington
-    administrative_area_level_2 = models.CharField(max_length=100, blank=True, null=True) # County, e.g., Essex County
-    administrative_area_level_1 = models.CharField(max_length=100, blank=True, null=True)  # Province/State, e.g., ON
-    country = models.CharField(max_length=100, blank=True, null=True)
-    postal_code = models.CharField(max_length=20, blank=True, null=True)
     latitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
     longitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
     raw_response = models.JSONField(null=True, blank=True)
 
     # --- Standardized Properties (Abstraction Layer) ---
+    def get_component(self, component_type, fallback_types=None):
+        """
+        Intelligently searches for a component in the raw_response JSON.
+        `component_type` is the desired type (e.g., 'locality').
+        `fallback_types` is an optional list of other types to try in order.
+        """
+        if not self.raw_response or 'address_components' not in self.raw_response:
+            return None
+        
+        types_to_check = [component_type]
+        if fallback_types:
+            types_to_check.extend(fallback_types)
+
+        for comp_type in types_to_check:
+            for component in self.raw_response['address_components']:
+                if comp_type in component.get('types', []):
+                    return component.get('long_name')
+        return None
+
+    @property
+    def street_number(self):
+        return self.get_component('street_number')
+
+    @property
+    def route(self):
+        return self.get_component('route')
+
     @property
     def city(self):
-        """Intelligently determines the city name from available fields."""
-        return self.locality or self.administrative_area_level_3 or self.sublocality
+        return self.get_component('locality', fallback_types=['administrative_area_level_3', 'sublocality'])
 
     @property
     def province(self):
-        """Returns the province/state."""
-        return self.administrative_area_level_1
+        return self.get_component('administrative_area_level_1')
 
     @property
-    def street_address(self):
-        """Returns the street number and name, if available."""
-        return f"{self.street_number} {self.route}" if self.street_number and self.route else ""
+    def postal_code(self):
+        return self.get_component('postal_code')
 
     def is_degenerate(self):
-        """Checks if the address is missing critical components using the standardized properties."""
+        """Checks if the address is missing critical components using the intelligent properties."""
         return not self.street_number or not self.route or not self.city or not self.postal_code or len(self.postal_code) < 6
 
     def get_degeneracy_reasons(self):
@@ -101,22 +116,11 @@ class Address(models.Model):
         if not data or not data.get('place_id'):
             return None, False
 
-        address_components = {comp['types'][0]: comp['long_name'] for comp in data.get('address_components', []) if comp.get('types')}
-
         defaults = {
             'formatted': data.get('formatted_address'),
             'latitude': decimal.Decimal(data['geometry']['location']['lat']),
             'longitude': decimal.Decimal(data['geometry']['location']['lng']),
-            'street_number': address_components.get('street_number'),
-            'route': address_components.get('route'),
-            'locality': address_components.get('locality'),
-            'sublocality': address_components.get('sublocality'),
-            'administrative_area_level_3': address_components.get('administrative_area_level_3'),
-            'administrative_area_level_2': address_components.get('administrative_area_level_2'),
-            'administrative_area_level_1': address_components.get('administrative_area_level_1'),
-            'country': address_components.get('country'),
-            'postal_code': address_components.get('postal_code'),
-            'raw_response': data,
+            'raw_response': data, # Store the entire response
         }
 
         address, created = cls.objects.update_or_create(place_id=data['place_id'], defaults=defaults)

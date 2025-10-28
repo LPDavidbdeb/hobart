@@ -1,5 +1,5 @@
 from django.db import models
-from address.models import FSA # Import FSA from the address app
+from address.models import FSA
 
 class CodeDimension(models.Model):
     """An abstract base class for simple code/description dimension models."""
@@ -13,9 +13,24 @@ class CodeDimension(models.Model):
     def __str__(self):
         return f"{self.description} ({self.code})" if self.description else self.code
 
-class Territory(CodeDimension):
-    """Represents a sales or service territory, which can be composed of multiple FSAs."""
+class Territory(models.Model):
+    """Represents a standardized geographical area, such as a Province, Region, or City."""
+    class TerritoryType(models.TextChoices):
+        PROVINCE = 'PROVINCE', 'Province'
+        REGION = 'REGION', 'Regional Municipality' # RCM in Quebec
+        CITY = 'CITY', 'City'
+
+    name = models.CharField(max_length=100, db_index=True)
+    type = models.CharField(max_length=20, choices=TerritoryType.choices, db_index=True)
     fsas = models.ManyToManyField(FSA, blank=True, related_name='territories', help_text="The FSAs that define this territory.")
+
+    class Meta:
+        unique_together = ('name', 'type') # Ensures you don't have two "Quebec" provinces
+        verbose_name_plural = "Territories"
+        ordering = ['type', 'name']
+
+    def __str__(self):
+        return f"{self.name} ({self.get_type_display()})"
 
 class TravelCostParameters(models.Model):
     """Stores a historical record of configurable parameters for calculating travel costs."""

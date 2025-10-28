@@ -11,6 +11,7 @@ import os
 
 from django.core.wsgi import get_wsgi_application
 
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'Hobart.settings.production')
+# Default to the postgres settings for local development
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'Hobart.settings.postgres')
 
 application = get_wsgi_application()

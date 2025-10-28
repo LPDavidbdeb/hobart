@@ -26,7 +26,8 @@ RUN pip install --no-cache-dir -r requirements-postgres.txt
 COPY . .
 
 # Collect static files
-RUN python manage.py collectstatic --noinput
+# Set DJANGO_SETTINGS_MODULE and a dummy DATABASE_URL just for this command
+RUN DJANGO_SETTINGS_MODULE=Hobart.settings.postgres DATABASE_URL=postgres://dummy:dummy@dummy/dummy python manage.py collectstatic --noinput
 
 # Expose the port the app runs on
 EXPOSE 8080

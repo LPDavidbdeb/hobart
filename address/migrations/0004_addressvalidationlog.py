@@ -8,7 +8,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('address', '0003_merge_0002_addressstatus_0002_create_address_statuses'),
+        ('address', '0002_address_status_data'),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
 

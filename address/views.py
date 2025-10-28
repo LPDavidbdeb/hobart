@@ -58,12 +58,9 @@ def search_address_api(request):
         suggestions = []
         gmaps_client = GoogleMapsClient()
 
+        # CORRECTED: Only query on the 'formatted' field as others are now properties
         local_results = Address.objects.filter(
-            Q(formatted__icontains=query) |
-            Q(street_number__icontains=query) |
-            Q(route__icontains=query) |
-            Q(locality__icontains=query) |
-            Q(postal_code__icontains=query)
+            Q(formatted__icontains=query)
         )[:5]
 
         suggestions.extend([

@@ -1,21 +1,16 @@
 from django.contrib import admin
 from .models import Territory, TravelCostParameters
-from address.models import FSA # FSA is now in the address app
-
-@admin.register(FSA)
-class FSAAdmin(admin.ModelAdmin):
-    list_display = ('code', 'description')
-    search_fields = ('code', 'description')
 
 @admin.register(Territory)
 class TerritoryAdmin(admin.ModelAdmin):
-    list_display = ('code', 'description', 'get_fsas')
-    search_fields = ('code', 'description')
+    list_display = ('name', 'type', 'get_fsa_count')
+    list_filter = ('type',)
+    search_fields = ('name',)
     filter_horizontal = ('fsas',) # For ManyToMany field
 
-    def get_fsas(self, obj):
-        return ", ".join([fsa.code for fsa in obj.fsas.all()])
-    get_fsas.short_description = 'FSAs'
+    def get_fsa_count(self, obj):
+        return obj.fsas.count()
+    get_fsa_count.short_description = '# of FSAs'
 
 @admin.register(TravelCostParameters)
 class TravelCostParametersAdmin(admin.ModelAdmin):

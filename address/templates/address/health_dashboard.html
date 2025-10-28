@@ -14,12 +14,21 @@
 
     <p class="text-muted">This dashboard shows the historical trend of address data quality. Each point represents a validation run, allowing you to track improvements over time.</p>
 
-    <div class="card shadow-sm">
+    <div class="card shadow-sm mb-4">
         <div class="card-header">
-            <h4 class="mb-0">Address Quality Trend</h4>
+            <h4 class="mb-0">Client Address Quality Trends</h4>
         </div>
         <div class="card-body">
-            <div id="d3-chart-container"></div>
+            <div id="d3-client-chart-container"></div>
+        </div>
+    </div>
+
+    <div class="card shadow-sm">
+        <div class="card-header">
+            <h4 class="mb-0">Employee Address Quality Trends</h4>
+        </div>
+        <div class="card-body">
+            <div id="d3-employee-chart-container"></div>
         </div>
     </div>
 </div>
@@ -32,75 +41,122 @@
 document.addEventListener('DOMContentLoaded', function() {
     const rawData = JSON.parse('{{ logs_json|escapejs }}');
     if (rawData.length === 0) {
-        document.getElementById('d3-chart-container').innerHTML = '<div class="alert alert-info">No validation data to display. Run a validation to see the chart.</div>';
+        document.getElementById('d3-client-chart-container').innerHTML = '<div class="alert alert-info">No validation data to display. Run a validation to see the chart.</div>';
+        document.getElementById('d3-employee-chart-container').innerHTML = '<div class="alert alert-info">No validation data to display. Run a validation to see the chart.</div>';
         return;
     }
 
     const data = rawData.map(d => ({
         date: new Date(d.timestamp),
-        clients_complete: +d.clients_complete,
         clients_incomplete: +d.clients_incomplete,
-        employees_complete: +d.employees_complete,
+        clients_missing: +d.clients_missing,
         employees_incomplete: +d.employees_incomplete,
+        employees_missing: +d.employees_missing,
     }));
 
-    // --- D3 Chart Setup ---
-    const margin = {top: 20, right: 120, bottom: 50, left: 60},
+    // --- Chart Setup Common Variables ---
+    const margin = {top: 20, right: 150, bottom: 50, left: 60},
           width = 960 - margin.left - margin.right,
-          height = 500 - margin.top - margin.bottom;
+          height = 400 - margin.top - margin.bottom; // Slightly smaller height for two charts
 
-    const svg = d3.select("#d3-chart-container")
+    const lineGenerator = (xScale, yScale, xVal, yVal) => d3.line()
+        .x(d => xScale(d[xVal]))
+        .y(d => yScale(d[yVal]));
+
+    // --- Client Chart ---
+    const clientSvg = d3.select("#d3-client-chart-container")
       .append("svg")
         .attr("width", width + margin.left + margin.right)
         .attr("height", height + margin.top + margin.bottom)
       .append("g")
         .attr("transform", `translate(${margin.left},${margin.top})`);
 
-    // --- Scales ---
-    const x = d3.scaleTime()
+    const clientX = d3.scaleTime()
       .domain(d3.extent(data, d => d.date))
       .range([0, width]);
 
-    const y = d3.scaleLinear()
-      .domain([0, d3.max(data, d => Math.max(d.clients_complete, d.clients_incomplete, d.employees_complete, d.employees_incomplete))])
+    const clientY = d3.scaleLinear()
+      .domain([0, d3.max(data, d => Math.max(d.clients_incomplete, d.clients_missing))])
       .range([height, 0]);
 
-    // --- Axes ---
-    svg.append("g")
-      .attr("transform", `translate(0,${height})`)
-      .call(d3.axisBottom(x));
+    clientSvg.append("g").attr("transform", `translate(0,${height})`).call(d3.axisBottom(clientX));
+    clientSvg.append("g").call(d3.axisLeft(clientY));
 
-    svg.append("g")
-      .call(d3.axisLeft(y));
-
-    // --- Lines ---
-    const line = (xVal, yVal) => d3.line()
-        .x(d => x(d[xVal]))
-        .y(d => y(d[yVal]));
-
-    const lines = [
-        {name: "Clients Complete", key: "clients_complete", color: "#198754"},
+    const clientLines = [
         {name: "Clients Incomplete", key: "clients_incomplete", color: "#ffc107"},
-        {name: "Employees Complete", key: "employees_complete", color: "#0dcaf0"},
-        {name: "Employees Incomplete", key: "employees_incomplete", color: "#dc3545"}
+        {name: "Clients Missing", key: "clients_missing", color: "#fd7e14"}
     ];
 
-    lines.forEach(l => {
-        svg.append("path")
+    clientLines.forEach(l => {
+        clientSvg.append("path")
           .datum(data)
           .attr("fill", "none")
           .attr("stroke", l.color)
           .attr("stroke-width", 2.5)
-          .attr("d", line('date', l.key));
+          .attr("d", lineGenerator(clientX, clientY, 'date', l.key));
+
+        clientSvg.selectAll(`.dot-${l.key}`)
+          .data(data)
+          .enter().append("circle")
+            .attr("class", `dot-${l.key}`)
+            .attr("cx", d => clientX(d.date))
+            .attr("cy", d => clientY(d[l.key]))
+            .attr("r", 5)
+            .attr("fill", l.color);
     });
 
-    // --- Legend ---
-    const legend = svg.append("g")
-        .attr("transform", `translate(${width + 20}, 0)`);
+    const clientLegend = clientSvg.append("g").attr("transform", `translate(${width + 20}, 0)`);
+    clientLines.forEach((l, i) => {
+        clientLegend.append("circle").attr("cx",0).attr("cy",i*25).attr("r", 6).style("fill", l.color)
+        clientLegend.append("text").attr("x", 15).attr("y", i*25).text(l.name).style("font-size", "15px").attr("alignment-baseline","middle")
+    });
 
-    lines.forEach((l, i) => {
-        legend.append("circle").attr("cx",0).attr("cy",i*25).attr("r", 6).style("fill", l.color)
-        legend.append("text").attr("x", 15).attr("y", i*25).text(l.name).style("font-size", "15px").attr("alignment-baseline","middle")
+    // --- Employee Chart ---
+    const employeeSvg = d3.select("#d3-employee-chart-container")
+      .append("svg")
+        .attr("width", width + margin.left + margin.right)
+        .attr("height", height + margin.top + margin.bottom)
+      .append("g")
+        .attr("transform", `translate(${margin.left},${margin.top})`);
+
+    const employeeX = d3.scaleTime()
+      .domain(d3.extent(data, d => d.date))
+      .range([0, width]);
+
+    const employeeY = d3.scaleLinear()
+      .domain([0, d3.max(data, d => Math.max(d.employees_incomplete, d.employees_missing))])
+      .range([height, 0]);
+
+    employeeSvg.append("g").attr("transform", `translate(0,${height})`).call(d3.axisBottom(employeeX));
+    employeeSvg.append("g").call(d3.axisLeft(employeeY));
+
+    const employeeLines = [
+        {name: "Employees Incomplete", key: "employees_incomplete", color: "#dc3545"},
+        {name: "Employees Missing", key: "employees_missing", color: "#6f42c1"}
+    ];
+
+    employeeLines.forEach(l => {
+        employeeSvg.append("path")
+          .datum(data)
+          .attr("fill", "none")
+          .attr("stroke", l.color)
+          .attr("stroke-width", 2.5)
+          .attr("d", lineGenerator(employeeX, employeeY, 'date', l.key));
+
+        employeeSvg.selectAll(`.dot-${l.key}`)
+          .data(data)
+          .enter().append("circle")
+            .attr("class", `dot-${l.key}`)
+            .attr("cx", d => employeeX(d.date))
+            .attr("cy", d => employeeY(d[l.key]))
+            .attr("r", 5)
+            .attr("fill", l.color);
+    });
+
+    const employeeLegend = employeeSvg.append("g").attr("transform", `translate(${width + 20}, 0)`);
+    employeeLines.forEach((l, i) => {
+        employeeLegend.append("circle").attr("cx",0).attr("cy",i*25).attr("r", 6).style("fill", l.color)
+        employeeLegend.append("text").attr("x", 15).attr("y", i*25).text(l.name).style("font-size", "15px").attr("alignment-baseline","middle")
     });
 });
 </script>

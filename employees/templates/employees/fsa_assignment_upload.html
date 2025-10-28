@@ -1,0 +1,39 @@
+{% extends 'base.html' %}
+{% load django_bootstrap5 %}
+
+{% block title %}Upload FSA Assignments{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h2>Upload FSA Assignments for Managers</h2>
+    <p class="text-muted">Upload a CSV file to bulk-assign Forward Sortation Areas (FSAs) to managers.</p>
+
+    {% if messages %}
+        {% for message in messages %}
+            <div class="alert {% if message.tags %}alert-{{ message.tags }}{% endif %}" role="alert">
+                {{ message }}
+            </div>
+        {% endfor %}
+    {% endif %}
+
+    <div class="card">
+        <div class="card-body">
+            <h5 class="card-title">CSV File Format</h5>
+            <p class="card-text">
+                The CSV file must contain exactly two columns in this order:
+            </p>
+            <ol>
+                <li><strong>FSA Code:</strong> The 3-character code of the FSA (e.g., 'G1A').</li>
+                <li><strong>Employee Code:</strong> The unique code of the employee with the 'Manager' role.</li>
+            </ol>
+            <p>The first row can optionally be a header row; it will be skipped automatically.</p>
+
+            <form method="post" enctype="multipart/form-data" class="mt-4">
+                {% csrf_token %}
+                {% bootstrap_form form %}
+                <button type="submit" class="btn btn-primary">Upload and Process File</button>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
