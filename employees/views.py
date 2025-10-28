@@ -42,7 +42,7 @@ class BaseEmployeeListView(LoginRequiredMixin, UserPassesTestMixin, ListView):
         context = super().get_context_data(**kwargs)
         context['page_title'] = self.page_title
         context['role_name'] = self.role.label
-        if 'form' not in kwargs:
+        if 'form' not in kwargs and self.form_class: # Added check for self.form_class
             context['form'] = self.form_class()
         return context
 
