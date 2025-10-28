@@ -6,8 +6,12 @@ import os
 if 'K_SERVICE' in os.environ:
     # Production settings on Cloud Run
     DEBUG = False
-    # Trust the automatically provided hostname
     ALLOWED_HOSTS = [os.environ.get('K_SERVICE') + '.run.app', '.run.app']
+    
+    # CSRF settings for HTTPS
+    CSRF_TRUSTED_ORIGINS = ['https://' + os.environ.get('K_SERVICE') + '.run.app']
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
 else:
     # Local development settings
     DEBUG = os.environ.get('DEBUG', 'True') == 'True'
