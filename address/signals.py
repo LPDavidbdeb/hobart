@@ -1,30 +1,36 @@
 from django.db.models.signals import post_save
 from django.dispatch import receiver
-from .models import Address, AddressStatus
+from .models import Address
+from organization.models import Territory
+from client.models import Client
 
 @receiver(post_save, sender=Address)
-def update_related_address_statuses(sender, instance, **kwargs):
-    """
-    Listens for an Address to be saved and updates the status on all related
-    Client and EmployeeProfile objects.
-    """
-    # Determine the correct status for the saved address
-    if instance.is_degenerate():
-        status_name = "INCOMPLETE"
-    else:
-        status_name = "COMPLETE"
-
-    try:
-        # Get the actual AddressStatus object from the database
-        status_obj = AddressStatus.objects.get(name=status_name)
-    except AddressStatus.DoesNotExist:
-        # This should not happen if the initial data is loaded, but is a safe fallback.
+def create_and_assign_territories(sender, instance, created, **kwargs):
+    """Signal to create territories from address data and assign them to clients."""
+    if not instance.postal_code: # Only process addresses with enough data
         return
 
-    # Update all related clients
-    # The related_name on the Address model's ForeignKey is 'clients'
-    instance.clients.all().update(address_status=status_obj)
+    territory_data = {
+        'PROVINCE': instance.administrative_area_level_1,
+        'REGION': instance.administrative_area_level_2,
+        'CITY': instance.locality,
+    }
 
-    # Update all related employee profiles
-    # The related_name is 'employee_profiles'
-    instance.employee_profiles.all().update(address_status=status_obj)
+    primary_territory = None
+
+    for territory_type, territory_name in territory_data.items():
+        if territory_name:
+            territory, _ = Territory.objects.get_or_create(
+                name=territory_name,
+                type=territory_type
+            )
+            # We will assign the most specific territory available (City > Region > Province)
+            primary_territory = territory
+
+    # If a territory was found/created, find related clients and assign it.
+    if primary_territory:
+        # Find clients directly linked to this address
+        clients_to_update = Client.objects.filter(address=instance)
+        for client in clients_to_update:
+            client.territory = primary_territory
+            client.save() # Note: This will re-trigger signals, be mindful of loops if any
