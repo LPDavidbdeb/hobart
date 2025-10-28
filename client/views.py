@@ -1,6 +1,7 @@
 import csv
 import io
 import json
+import os # Added this line
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required, user_passes_test
@@ -291,9 +292,6 @@ def process_client_csv(file):
 
 def process_dimension_csv(file, dimension_type):
     decoded_file = file.read().decode('utf-8-sig')
-    MODEL_MAP = {'industry_code': IndustryCode, 'customer_type_code': CustomerTypeCode, 'industry_sub_code': IndustrySubCode, 'territory': Territory}
-    TargetModel = MODEL_MAP.get(dimension_type)
-    if not TargetModel: raise ValueError("Invalid dimension type specified.")
     io_string = io.StringIO(decoded_file)
     reader = csv.reader(io_string, delimiter=',')
     for i, row in enumerate(reader):

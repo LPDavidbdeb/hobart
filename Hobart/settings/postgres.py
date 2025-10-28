@@ -13,6 +13,9 @@ if 'K_SERVICE' in os.environ:
     # Secure cookie settings
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
+
+    # Critical for Django behind a proxy like Cloud Run
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 else:
     # Local development settings
     DEBUG = os.environ.get('DEBUG', 'True') == 'True'

@@ -23,6 +23,7 @@ class Territory(models.Model):
     name = models.CharField(max_length=100, db_index=True)
     type = models.CharField(max_length=20, choices=TerritoryType.choices, db_index=True)
     fsas = models.ManyToManyField(FSA, blank=True, related_name='territories', help_text="The FSAs that define this territory.")
+    boundary_geojson = models.JSONField(null=True, blank=True, help_text="GeoJSON representation of the territory's boundary.")
 
     class Meta:
         unique_together = ('name', 'type') # Ensures you don't have two "Quebec" provinces
