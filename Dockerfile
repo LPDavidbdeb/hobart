@@ -25,6 +25,10 @@ RUN pip install --no-cache-dir -r requirements-postgres.txt
 # Copy the entire project into the container
 COPY . .
 
+# Make the entrypoint script executable
+COPY entrypoint.sh /app/entrypoint.sh
+RUN chmod +x /app/entrypoint.sh
+
 # Collect static files
 # Set DJANGO_SETTINGS_MODULE and a dummy DATABASE_URL just for this command
 RUN DJANGO_SETTINGS_MODULE=Hobart.settings.postgres DATABASE_URL=postgres://dummy:dummy@dummy/dummy python manage.py collectstatic --noinput
@@ -32,5 +36,5 @@ RUN DJANGO_SETTINGS_MODULE=Hobart.settings.postgres DATABASE_URL=postgres://dumm
 # Expose the port the app runs on
 EXPOSE 8080
 
-# Run gunicorn when the container launches
-CMD ["gunicorn", "--bind", ":8080", "--workers", "2", "Hobart.wsgi:application"]
+# Run the entrypoint script when the container launches
+ENTRYPOINT ["/app/entrypoint.sh"]
