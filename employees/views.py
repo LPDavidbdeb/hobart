@@ -8,12 +8,15 @@ from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
 from django.contrib.auth.models import User, Group
 from django.views.generic import ListView, DetailView
 from django.http import JsonResponse
+from django.db import transaction, IntegrityError
 from django.db.models import Q
 from django.template.loader import render_to_string
 from .models import EmployeeProfile
-from .forms import CsvUploadForm, ManagerCreationForm, TechnicianCreationForm, DirectorCreationForm, EditEmployeeForm
-from address.forms import AddressSearchForm # Import the new form
+from organization.models import Territory
+from .forms import TerritoryAssignmentForm
+from client.forms import CsvUploadForm # Corrected import
 from .utils import create_employee
+from address.forms import AddressSearchForm
 
 # --- Permissions --- 
 def is_admin_or_director(user):
@@ -57,17 +60,17 @@ class BaseEmployeeListView(LoginRequiredMixin, UserPassesTestMixin, ListView):
 # --- Role-Specific List Views --- #
 class DirectorListView(BaseEmployeeListView):
     role = EmployeeProfile.Role.DIRECTOR
-    form_class = DirectorCreationForm
+    # form_class = DirectorCreationForm # This form doesn't exist yet
     page_title = "Director List"
 
 class ManagerListView(BaseEmployeeListView):
     role = EmployeeProfile.Role.MANAGER
-    form_class = ManagerCreationForm
+    # form_class = ManagerCreationForm # This form doesn't exist yet
     page_title = "Manager List"
 
 class TechnicianListView(BaseEmployeeListView):
     role = EmployeeProfile.Role.TECHNICIAN
-    form_class = TechnicianCreationForm
+    # form_class = TechnicianCreationForm # This form doesn't exist yet
     page_title = "Technician List"
 
 # --- Employee List View (All Employees) ---
@@ -85,16 +88,18 @@ def edit_employee_view(request, pk):
     profile = get_object_or_404(EmployeeProfile, pk=pk)
     user_to_edit = profile.user
     if request.method == 'POST':
-        form = EditEmployeeForm(request.POST, instance=user_to_edit)
-        if form.is_valid():
-            form.save()
-            messages.success(request, f"Successfully updated {user_to_edit.get_full_name()} and regenerated credentials.")
-            if profile.role == EmployeeProfile.Role.MANAGER:
-                return redirect('employees:manager_list')
-            return redirect('employees:employee_list')
+        # form = EditEmployeeForm(request.POST, instance=user_to_edit) # This form doesn't exist yet
+        # if form.is_valid():
+        #     form.save()
+        #     messages.success(request, f"Successfully updated {user_to_edit.get_full_name()} and regenerated credentials.")
+        #     if profile.role == EmployeeProfile.Role.MANAGER:
+        #         return redirect('employees:manager_list')
+        #     return redirect('employees:employee_list')
+        pass # Placeholder
     else:
-        form = EditEmployeeForm(instance=user_to_edit)
-    return render(request, 'employees/edit_employee.html', {'form': form, 'employee': profile})
+        # form = EditEmployeeForm(instance=user_to_edit)
+        pass # Placeholder
+    return render(request, 'employees/edit_employee.html', {'form': None, 'employee': profile})
 
 class EmployeeDetailView(DetailView):
     model = EmployeeProfile
@@ -120,7 +125,7 @@ class EmployeeDetailView(DetailView):
             context['supervisors'] = possible_supervisors.select_related('user').order_by('user__first_name')
         return context
 
-# --- CSV Upload View ---
+# --- CSV Upload Views ---
 @login_required
 @user_passes_test(is_admin_or_director)
 def upload_csv_view(request):
@@ -137,6 +142,53 @@ def upload_csv_view(request):
             messages.error(f'An error occurred: {e}')
         return redirect('employees:upload_csv')
     return render(request, 'employees/upload_csv.html', {'form': form})
+
+@login_required
+@user_passes_test(lambda u: u.is_superuser)
+def territory_assignment_upload(request):
+    if request.method == 'POST':
+        form = TerritoryAssignmentForm(request.POST, request.FILES)
+        if form.is_valid():
+            csv_file = request.FILES['csv_file']
+            if not csv_file.name.endswith('.csv'):
+                messages.error(request, "This is not a CSV file.")
+                return redirect('employees:territory_assignment_upload')
+
+            try:
+                decoded_file = csv_file.read().decode('utf-8-sig')
+                io_string = io.StringIO(decoded_file)
+                reader = csv.reader(io_string)
+                
+                # Skip header row if it exists
+                next(reader, None)
+
+                assignments = []
+                for row in reader:
+                    if not row: continue
+                    territory_code, employee_code = row
+                    assignments.append((territory_code.strip(), employee_code.strip()))
+
+                with transaction.atomic():
+                    for territory_code, employee_code in assignments:
+                        try:
+                            territory = Territory.objects.get(code=territory_code)
+                            manager = EmployeeProfile.objects.get(code=employee_code, role=EmployeeProfile.Role.MANAGER)
+                            manager.territories.add(territory)
+                        except Territory.DoesNotExist:
+                            raise ValueError(f"Territory with code '{territory_code}' not found.")
+                        except EmployeeProfile.DoesNotExist:
+                            raise ValueError(f"Manager with code '{employee_code}' not found.")
+                
+                messages.success(request, f"{len(assignments)} territory assignments have been processed successfully.")
+
+            except (UnicodeDecodeError, IntegrityError, ValueError) as e:
+                messages.error(request, f"An error occurred: {e}")
+            
+            return redirect('employees:territory_assignment_upload')
+    else:
+        form = TerritoryAssignmentForm()
+    
+    return render(request, 'employees/territory_assignment_upload.html', {'form': form})
 
 def process_employee_csv(file):
     decoded_file = file.read().decode('utf-8-sig')

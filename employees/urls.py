@@ -15,6 +15,7 @@ urlpatterns = [
     path('edit/<int:pk>/', views.edit_employee_view, name='edit_employee'),
     path('<int:pk>/', views.EmployeeDetailView.as_view(), name='employee_detail'),
     path('upload-csv/', views.upload_csv_view, name='upload_csv'),
+    path('assign-territories/', views.territory_assignment_upload, name='territory_assignment_upload'), # New URL
 
     # API endpoints
     path('api/update-field/', views.update_employee_field_api, name='update_employee_field_api'),

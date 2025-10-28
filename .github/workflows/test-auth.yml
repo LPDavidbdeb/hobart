@@ -16,6 +16,9 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
 
+    - name: Set up Google Cloud SDK
+      uses: google-github-actions/setup-gcloud@v2
+
     - name: Authenticate to Google Cloud
       id: auth
       uses: google-github-actions/auth@v2

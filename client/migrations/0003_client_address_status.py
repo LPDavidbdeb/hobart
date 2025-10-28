@@ -7,7 +7,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('address', '0002_addressstatus'),
+        ('address', '0002_address_status_data'),
         ('client', '0002_client_address1_client_address2_client_postal_code'),
     ]
 

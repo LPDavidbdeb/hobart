@@ -1,0 +1,51 @@
+name: Build and Deploy to Cloud Run
+
+on:
+  push:
+    branches:
+      - main  # This workflow runs on every push to the main branch
+
+env:
+  PROJECT_ID: hobart-476116
+  REGION: us-central1
+  REPO_NAME: hobart-repo
+
+jobs:
+  deploy:
+    name: Deploy to Cloud Run
+    runs-on: ubuntu-latest
+
+    # Add the permissions block
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Build and Push Docker Image
+        run: |-
+          gcloud builds submit --tag ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO_NAME }}/hobart-app:latest --no-source .
+
+      - name: Deploy to Cloud Run
+        run: |-
+          gcloud run deploy hobart-app \
+            --image ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO_NAME }}/hobart-app:latest \
+            --region ${{ env.REGION }} \
+            --platform managed \
+            --allow-unauthenticated \
+            --set-secrets="DJANGO_SECRET_KEY=django_secret_key:latest" \
+            --set-secrets="GOOGLE_MAPS_API_KEY=google_maps_api_key:latest" \
+            --set-secrets="DATABASE_URL=database_url:latest" \
+            --add-cloudsql-instances hobart-476116:us-central1:hobart-postgres-db
