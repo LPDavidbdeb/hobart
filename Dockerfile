@@ -36,5 +36,10 @@ RUN DJANGO_SETTINGS_MODULE=Hobart.settings.postgres DATABASE_URL=postgres://dumm
 # Expose the port the app runs on
 EXPOSE 8080
 
-# Run the entrypoint script when the container launches
-ENTRYPOINT ["/app/entrypoint.sh"]
+# --- TEMPORARY DEBUG ENTRYPOINT ---
+# This will run `manage.py check` and exit. It will produce a traceback if there's a fundamental error.
+ENTRYPOINT ["python", "manage.py", "check", "--settings=Hobart.settings.postgres"]
+# --- END TEMPORARY DEBUG ENTRYPOINT ---
+
+# Original ENTRYPOINT (commented out for debug)
+# ENTRYPOINT ["/app/entrypoint.sh"]
