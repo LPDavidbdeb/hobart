@@ -3,16 +3,17 @@ name: Build and Deploy to Cloud Run
 on:
   push:
     branches:
-      - main  # This workflow runs on every push to the main branch
+      - main
 
 env:
   PROJECT_ID: hobart-476116
   REGION: us-central1
   REPO_NAME: hobart-repo
+  IMAGE_NAME: hobart-app
 
 jobs:
   deploy:
-    name: Deploy to Cloud Run
+    name: Build and Deploy
     runs-on: ubuntu-latest
 
     permissions:
@@ -30,17 +31,19 @@ jobs:
           workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
 
-      - name: Set up Cloud SDK
-        uses: google-github-actions/setup-gcloud@v2
+      - name: Configure Docker
+        run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev
 
-      - name: Build and Push Docker Image
-        run: |-
-          gcloud builds submit --tag ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO_NAME }}/hobart-app:${{ github.sha }} --suppress-logs .
+      - name: Build Docker Image
+        run: docker build -t ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO_NAME }}/${{ env.IMAGE_NAME }}:${{ github.sha }} .
+
+      - name: Push Docker Image
+        run: docker push ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO_NAME }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
 
       - name: Deploy to Cloud Run
-        run: |-
-          gcloud run deploy hobart-app \
-            --image ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO_NAME }}/hobart-app:${{ github.sha }} \
+        run: |
+          gcloud run deploy ${{ env.IMAGE_NAME }} \
+            --image ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO_NAME }}/${{ env.IMAGE_NAME }}:${{ github.sha }} \
             --region ${{ env.REGION }} \
             --platform managed \
             --allow-unauthenticated \
