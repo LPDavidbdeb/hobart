@@ -35,7 +35,7 @@ jobs:
 
       - name: Build and Push Docker Image
         run: |-
-          gcloud builds submit --tag ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO_NAME }}/hobart-app:${{ github.sha }} --async .
+          gcloud builds submit --tag ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO_NAME }}/hobart-app:${{ github.sha }} --suppress-logs .
 
       - name: Deploy to Cloud Run
         run: |-
