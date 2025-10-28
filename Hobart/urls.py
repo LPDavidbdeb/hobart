@@ -16,6 +16,7 @@ urlpatterns = [
     path('', include('core.urls', namespace='core')), # Added core app URLs
 
     # Project-level views
+    path('login/', views.login_view, name='login'),
     path('logout/', views.logout_view, name='logout'),
     path('home/', views.personalized_home_view, name='personalized_home'),
     # Note: The root path '' is now handled by the core app.
