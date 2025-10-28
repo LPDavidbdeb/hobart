@@ -7,3 +7,4 @@ sqlparse==0.5.3
 dj-database-url==2.2.0
 gunicorn
 django-extensions
+unidecode
