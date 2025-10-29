@@ -3,11 +3,11 @@ import json
 from django.http import JsonResponse
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
-from django.shortcuts import get_object_or_404, redirect
-from django.views.generic import ListView
+from django.shortcuts import get_object_or_404, redirect, render # Add render
+from django.views.generic import ListView, View # Add View
 from django.contrib import messages
 from django.db.models import Q
-from .models import Address, AddressValidationLog, AddressStatus
+from .models import Address, AddressValidationLog, AddressStatus, FSA # Add FSA
 from .utils import run_address_validation_batch
 from employees.models import EmployeeProfile
 from client.models import Client
@@ -16,6 +16,17 @@ from DAO.adresses_DAO import GoogleMapsClient
 # --- Permissions ---
 def is_admin_or_director(user):
     return user.is_superuser or user.groups.filter(name='Directors').exists()
+
+# --- FSA Search View ---
+class FSASearchView(LoginRequiredMixin, UserPassesTestMixin, View):
+    template_name = 'address/fsa_search.html'
+
+    def test_func(self):
+        # For Phase 1, only superusers can access this page
+        return self.request.user.is_superuser
+
+    def get(self, request, *args, **kwargs):
+        return render(request, self.template_name)
 
 # --- Dashboard View ---
 class AddressHealthDashboardView(LoginRequiredMixin, UserPassesTestMixin, ListView):
@@ -46,6 +57,28 @@ class AddressHealthDashboardView(LoginRequiredMixin, UserPassesTestMixin, ListVi
         return redirect('address:health_dashboard')
 
 # --- API Views ---
+@login_required
+def fsa_autocomplete_api(request):
+    if not request.user.is_superuser: # For Phase 1, only superusers
+        return JsonResponse({'error': 'Permission denied.'}, status=403)
+
+    query = request.GET.get('term', '')
+    if len(query) < 2: # Don't search for less than 2 characters
+        return JsonResponse([], safe=False)
+
+    # For Phase 1, search all FSAs
+    fsas = FSA.objects.filter(description__icontains=query)[:10]
+    
+    results = [
+        {
+            'id': fsa.id,
+            'label': f"{fsa.code} - {fsa.description}", # For jQuery UI Autocomplete
+            'value': fsa.code # The value to put in the search box
+        }
+        for fsa in fsas
+    ]
+    return JsonResponse(results, safe=False)
+
 @login_required
 def search_address_api(request):
     try:

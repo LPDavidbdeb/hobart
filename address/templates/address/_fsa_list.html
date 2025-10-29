@@ -1,0 +1,7 @@
+<ul class="list-group">
+    {% for fsa in fsas %}
+        <li class="list-group-item">{{ fsa.code }} - {{ fsa.description }}</li>
+    {% empty %}
+        <li class="list-group-item">No FSAs found.</li>
+    {% endfor %}
+</ul>

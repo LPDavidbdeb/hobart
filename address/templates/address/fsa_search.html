@@ -1,0 +1,50 @@
+{% extends 'base.html' %}
+{% load django_bootstrap5 %}
+
+{% block title %}FSA Search{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h2>FSA Search</h2>
+    <p>Start typing a city or region to find related FSAs.</p>
+
+    <form id="fsa-search-form" method="get" action="{% url 'address:fsa_search' %}">
+        <div class="mb-3">
+            <label for="fsa-search-input" class="form-label">Search by Description</label>
+            <input type="text" class="form-control" id="fsa-search-input" name="q" placeholder="e.g., Montreal">
+        </div>
+        <button type="submit" class="btn btn-primary">Search</button>
+    </form>
+
+    <hr class="my-4">
+
+    <h4>Results</h4>
+    <div id="fsa-results-container">
+        {% if fsas %}
+            {% include 'address/_fsa_list.html' with fsas=fsas %}
+        {% else %}
+            <p>No FSAs found for the current search.</p>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<link rel="stylesheet" href="https://code.jquery.com/ui/1.13.2/themes/base/jquery-ui.css">
+<script src="https://code.jquery.com/jquery-3.6.0.js"></script>
+<script src="https://code.jquery.com/ui/1.13.2/jquery-ui.js"></script>
+<script>
+$(function() {
+    $("#fsa-search-input").autocomplete({
+        source: "{% url 'address:fsa_autocomplete_api' %}",
+        minLength: 2,
+        select: function(event, ui) {
+            // When an item is selected, you can optionally submit the form
+            // or perform another action. For now, it just fills the input.
+            $("#fsa-search-input").val(ui.item.value);
+            return false;
+        }
+    });
+});
+</script>
+{% endblock %}
