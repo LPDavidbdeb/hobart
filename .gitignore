@@ -15,7 +15,7 @@ db.sqlite3
 /static/
 
 # Data dumps
-*.json
+data_backup.json
 *.xml
 *.csv
 
@@ -26,3 +26,6 @@ google-cloud-sdk/
 # IDE settings
 .idea/
 .vscode/
+
+# Downloaded data
+DL/
