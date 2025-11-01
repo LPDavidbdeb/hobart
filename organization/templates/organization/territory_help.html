@@ -1,0 +1,73 @@
+{% extends "admin/base_site.html" %}
+{% load static %}
+
+{% block title %}Territory Management Help{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h1 class="mb-4">Territory Management Documentation</h1>
+
+    <div class="card mb-4">
+        <div class="card-header">
+            <h2>Data Model Overview</h2>
+        </div>
+        <div class="card-body">
+            <p>The territory management system is designed to organize addresses into multiple, independent hierarchical trees (e.g., an "Electoral" tree, an "Administrative" tree).</p>
+            <ul>
+                <li><strong>NestedTerritory:</strong> The core model for the hierarchy, using <code>django-mptt</code>. Each node in the tree has a <code>name</code>, <code>type</code> (Country, Province, Region, etc.), and a <code>tree_name</code> to identify which hierarchy it belongs to.</li>
+                <li><strong>Address:</strong> Your standard address model, containing geocoding information (latitude, longitude, and a <code>location</code> point).</li>
+                <li><strong>AddressTerritoryLink:</strong> This is the crucial link between the other two models. It's a "through" model that creates a many-to-many relationship, allowing a single <code>Address</code> to be linked to multiple leaf nodes in different trees.</li>
+            </ul>
+        </div>
+    </div>
+
+    <div class="card mb-4">
+        <div class="card-header">
+            <h2>Data Sources</h2>
+        </div>
+        <div class="card-body">
+            <p>The base hierarchies are built from official geographical shapefiles. The primary source for Canadian census and electoral boundaries is Statistics Canada.</p>
+            <p><strong>Source for Canadian Geographical Shapefiles:</strong> <a href="https://www12.statcan.gc.ca/census-recensement/2021/geo/sip-pis/boundary-limites/index2021-fra.cfm?year=21" target="_blank">Statistics Canada 2021 Census Boundary Files</a></p>
+        </div>
+    </div>
+
+    <div class="card mb-4">
+        <div class="card-header">
+            <h2>Management Scripts</h2>
+        </div>
+        <div class="card-body">
+            <p>The territory system is managed via a series of command-line scripts. They should be run in the following order:</p>
+            
+            <hr>
+
+            <h4>1. Build Base Hierarchy</h4>
+            <p><strong>Script:</strong> <code>build_base_hierarchy.py</code></p>
+            <p><strong>Purpose:</strong> Creates the foundational levels of a new tree (Country, Province, Region) from shapefiles. This is a destructive operation for the specified tree only.</p>
+            <p><strong>Usage:</strong></p>
+            <pre class="bg-light p-3 rounded"><code>python manage.py build_base_hierarchy [province_shapefile] [region_shapefile] --tree-name [TREE_NAME] [options]</code></pre>
+            <p><strong>Example:</strong></p>
+            <pre class="bg-light p-3 rounded"><code>python manage.py build_base_hierarchy DL/geodata/lpr_000b21a_f/lpr_000b21a_f.shp DL/geodata/lcef000b21a_f/lcÇf000b21a_f.shp --tree-name Electoral --prov-name-field PRNOM --prov-code-field PRIDU --region-name-field CÉFANOM --region-code-field CÉFIDU --region-parent-field PRIDU</code></pre>
+
+            <hr>
+
+            <h4>2. Validate Coverage (Optional but Recommended)</h4>
+            <p><strong>Script:</strong> <code>validate_shapefile_coverage.py</code></p>
+            <p><strong>Purpose:</strong> Analyzes the base hierarchy in the database to calculate the percentage of each province's area that is covered by its child regions. This helps identify gaps in your shapefile data.</p>
+            <p><strong>Usage:</strong></p>
+            <pre class="bg-light p-3 rounded"><code>python manage.py validate_shapefile_coverage</code></pre>
+
+            <hr>
+
+            <h4>3. Place Addresses in Tree</h4>
+            <p><strong>Script:</strong> <code>place_addresses_in_tree.py</code></p>
+            <p><strong>Purpose:</strong> Links addresses to the leaf nodes of a specified, pre-existing tree. It uses efficient spatial queries to find all addresses that fall within the boundary of each leaf node.</p>
+            <p><strong>Usage:</strong></p>
+            <pre class="bg-light p-3 rounded"><code>python manage.py place_addresses_in_tree [TREE_NAME]</code></pre>
+            <p><strong>Example:</strong></p>
+            <pre class="bg-light p-3 rounded"><code>python manage.py place_addresses_in_tree Electoral</code></pre>
+
+        </div>
+    </div>
+
+</div>
+{% endblock %}

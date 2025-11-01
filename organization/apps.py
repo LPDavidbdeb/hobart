@@ -1,6 +1,9 @@
 from django.apps import AppConfig
 
-
 class OrganizationConfig(AppConfig):
-    default_auto_field = "django.db.models.BigAutoField"
-    name = "organization"
+    default_auto_field = 'django.db.models.BigAutoField'
+    name = 'organization'
+    verbose_name = 'Organization Management'
+
+    def ready(self):
+        import organization.signals # noqa

@@ -73,6 +73,56 @@
             </div>
         </div>
     </div>
+
+    <!-- Business Details Card -->
+    {% if business_name or website or open_now is not None or weekday_text %}
+    <div class="card shadow-sm mb-4">
+        <div class="card-header">
+            <h2 class="mb-0">Business Details (from Google Places)</h2>
+        </div>
+        <div class="card-body">
+            <table class="table table-bordered">
+                <tbody>
+                    {% if business_name %}
+                    <tr><th>Place Name</th><td>{{ business_name }}</td></tr>
+                    {% endif %}
+                    {% if website %}
+                    <tr><th>Website</th><td><a href="{{ website }}" target="_blank">{{ website }}</a></td></tr>
+                    {% endif %}
+                    {% if open_now is not None %}
+                    <tr><th>Currently Open</th><td>{% if open_now %}Yes{% else %}No{% endif %}</td></tr>
+                    {% endif %}
+                    {% if weekday_text %}
+                    <tr>
+                        <th>Opening Hours</th>
+                        <td>
+                            <ul class="list-unstyled">
+                                {% for day_hours in weekday_text %}
+                                <li>{{ day_hours }}</li>
+                                {% endfor %}
+                            </ul>
+                        </td>
+                    </tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Map Card -->
+    <div class="card shadow-sm mb-4">
+        <div class="card-header">
+            <h2 class="mb-0">Client Location</h2>
+        </div>
+        <div class="card-body">
+            {% if client.address_status.name == 'COMPLETE' and client.address.latitude and client.address.longitude and google_maps_api_key %}
+                <div id="map" style="height: 400px; width: 100%;"></div>
+            {% else %}
+                <p class="text-muted">Map not available: Address is not complete or coordinates are missing.</p>
+            {% endif %}
+        </div>
+    </div>
 </div>
 {% endblock %}
 
@@ -169,6 +219,12 @@ document.addEventListener('DOMContentLoaded', function() {
                     statusDiv.className = 'alert alert-success';
                     statusDiv.textContent = 'Address updated successfully!';
                     statusDiv.style.display = 'block';
+
+                    // Reload the page to show the map and business details if address became COMPLETE
+                    if (data.status.name === 'COMPLETE') {
+                        location.reload();
+                    }
+
                 } else {
                     statusDiv.className = 'alert alert-danger';
                     statusDiv.textContent = `Error: ${data.error}`;
@@ -192,4 +248,32 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 });
 </script>
+
+{% if client.address_status.name == 'COMPLETE' and client.address.latitude and client.address.longitude and google_maps_api_key %}
+<script>
+    let map;
+    let marker;
+
+    async function initMap() {
+        const clientLat = parseFloat("{{ client.address.latitude }}");
+        const clientLng = parseFloat("{{ client.address.longitude }}");
+        const clientLocation = { lat: clientLat, lng: clientLng };
+
+        const { Map } = await google.maps.importLibrary("map");
+        const { AdvancedMarkerElement } = await google.maps.importLibrary("marker");
+
+        map = new Map(document.getElementById("map"), {
+            zoom: 15,
+            center: clientLocation,
+            mapId: "{{ client.pk }}"
+        });
+
+        marker = new AdvancedMarkerElement({
+            position: clientLocation,
+            map: map,
+        });
+    }
+</script>
+<script async defer src="https://maps.googleapis.com/maps/api/js?key={{ google_maps_api_key }}&callback=initMap&libraries=marker"></script>
+{% endif %}
 {% endblock %}

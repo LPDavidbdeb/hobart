@@ -51,8 +51,6 @@
                     <ul class="dropdown-menu" aria-labelledby="navbarDropdownAddresses">
                         <li><a class="dropdown-item" href="{% url 'client:address_validation_list' %}">Address Validation Queue</a></li>
                         <li><a class="dropdown-item" href="{% url 'address:health_dashboard' %}">Address Health Dashboard</a></li>
-                        <li><hr class="dropdown-divider"></li>
-                        <li><a class="dropdown-item" href="{% url 'address:fsa_search' %}">FSA Search</a></li>
                     </ul>
                 </li>
 
@@ -73,6 +71,7 @@
                     </a>
                     <ul class="dropdown-menu" aria-labelledby="navbarDropdownAdmin">
                         <li><a class="dropdown-item" href="{% url 'admin:index' %}">Admin Center</a></li>
+                        <li><a class="dropdown-item" href="{% url 'organization:nested_territory_tree' %}">Territory Tree</a></li>
                         <li><hr class="dropdown-divider"></li>
                         <li><h6 class="dropdown-header">Bulk Assignments</h6></li>
                         <li><a class="dropdown-item" href="{% url 'employees:territory_assignment_upload' %}">Assign Territories to Managers</a></li>

@@ -1,20 +1,24 @@
 from django.contrib import admin
-from .models import Territory, TravelCostParameters
+from mptt.admin import DraggableMPTTAdmin
+from .models import NestedTerritory, Territory, TravelCostParameters
 
-@admin.register(Territory)
-class TerritoryAdmin(admin.ModelAdmin):
-    list_display = ('name', 'type', 'get_fsa_count')
-    list_filter = ('type',)
+@admin.register(NestedTerritory)
+class NestedTerritoryAdmin(DraggableMPTTAdmin):
+    """Admin interface for the hierarchical NestedTerritory model."""
+    # Display the pre-calculated client_count field directly
+    list_display = ('tree_actions', 'indented_title', 'type', 'client_count')
+    list_display_links = ('indented_title',)
     search_fields = ('name',)
-    filter_horizontal = ('fsas',) # For ManyToMany field
+    list_filter = ('type',)
 
-    def get_fsa_count(self, obj):
-        return obj.fsas.count()
-    get_fsa_count.short_description = '# of FSAs'
+# The old Territory model is not registered in the admin anymore
+# @admin.register(Territory)
+# class TerritoryAdmin(admin.ModelAdmin):
+#     ...
 
 @admin.register(TravelCostParameters)
 class TravelCostParametersAdmin(admin.ModelAdmin):
-    list_display = ('name', 'created_at', 'cost_per_minute', 'cost_per_km', 'truck_depreciation_fixed_cost', 'supply_charge_fixed_cost')
+    """Admin interface for TravelCostParameters."""
+    list_display = ('name', 'created_at', 'cost_per_minute', 'cost_per_km')
     list_filter = ('created_at',)
     search_fields = ('name',)
-    readonly_fields = ('created_at',) # Ensure timestamp is not manually editable

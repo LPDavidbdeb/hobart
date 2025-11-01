@@ -9,3 +9,4 @@ gunicorn
 django-extensions
 unidecode
 requests
+django-mptt

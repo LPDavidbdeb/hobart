@@ -1,17 +1,17 @@
 {% extends 'base.html' %}
 {% load django_bootstrap5 %}
 
-{% block title %}FSA Search{% endblock %}
+{% block title %}Territory Search{% endblock %}
 
 {% block content %}
 <div class="container mt-4">
-    <h2>FSA Search</h2>
-    <p>Start typing a city or region to find related FSAs.</p>
+    <h2>Territory Search</h2>
+    <p>Start typing a territory name (excluding FSA and Postal Code types) to find related territories and their client counts.</p>
 
-    <form id="fsa-search-form" method="get" action="{% url 'address:fsa_search' %}">
+    <form id="territory-search-form" method="get" action="{% url 'address:fsa_search' %}">
         <div class="mb-3">
-            <label for="fsa-search-input" class="form-label">Search by Description</label>
-            <input type="text" class="form-control" id="fsa-search-input" name="q" placeholder="e.g., Montreal">
+            <label for="territory-search-input" class="form-label">Search by Territory Name</label>
+            <input type="text" class="form-control" id="territory-search-input" name="q" placeholder="e.g., Montreal" value="{{ query }}">
         </div>
         <button type="submit" class="btn btn-primary">Search</button>
     </form>
@@ -19,12 +19,25 @@
     <hr class="my-4">
 
     <h4>Results</h4>
-    <div id="fsa-results-container">
-        {% if fsas %}
-            {% include 'address/_fsa_list.html' with fsas=fsas %}
+    <div id="territory-results-container">
+        {% if territories %}
+            <ul class="list-group">
+                {% for territory in territories %}
+                    <li class="list-group-item">
+                        <strong>{{ territory.name }}</strong> ({{ territory.get_type_display }}) - Clients: {{ territory.client_count }}
+                    </li>
+                {% endfor %}
+            </ul>
         {% else %}
-            <p>No FSAs found for the current search.</p>
+            <p>No territories found for the current search or query.</p>
         {% endif %}
+    </div>
+
+    <hr class="my-4">
+
+    <h4>Related FSAs</h4>
+    <div id="related-fsas-container" class="d-flex flex-wrap gap-2">
+        <p id="no-fsa-message">Select a territory from the autocomplete to see its related FSAs.</p>
     </div>
 </div>
 {% endblock %}
@@ -35,13 +48,55 @@
 <script src="https://code.jquery.com/ui/1.13.2/jquery-ui.js"></script>
 <script>
 $(function() {
-    $("#fsa-search-input").autocomplete({
+    $("#territory-search-input").autocomplete({
         source: "{% url 'address:fsa_autocomplete_api' %}",
         minLength: 2,
         select: function(event, ui) {
-            // When an item is selected, you can optionally submit the form
-            // or perform another action. For now, it just fills the input.
-            $("#fsa-search-input").val(ui.item.value);
+            console.log("Autocomplete item selected:", ui.item);
+            $("#territory-search-input").val(ui.item.value);
+            const territoryId = ui.item.id;
+            
+            // Clear previous FSAs and message
+            $("#related-fsas-container").empty();
+            // Re-add the initial message if no territoryId or if AJAX fails
+
+            if (territoryId) {
+                console.log("Fetching FSAs for territory ID:", territoryId);
+                const apiUrl = `/address/api/get-territory-fsas/${territoryId}/`;
+                console.log("AJAX URL:", apiUrl);
+
+                $.ajax({
+                    url: apiUrl,
+                    method: 'GET',
+                    success: function(data) {
+                        console.log("AJAX Success. Data received:", data);
+                        if (data.length > 0) {
+                            // Sort data by client_count in descending order
+                            data.sort((a, b) => b.client_count - a.client_count);
+
+                            data.forEach(function(fsa) {
+                                const fsaButton = `
+                                    <button type="button" class="btn btn-outline-primary d-flex flex-column align-items-center p-2">
+                                        <span class="fw-bold">${fsa.name}</span>
+                                        <small>Clients: ${fsa.client_count}</small>
+                                    </button>
+                                `;
+                                $("#related-fsas-container").append(fsaButton);
+                            });
+                        } else {
+                            $("#related-fsas-container").append('<p id="no-fsa-message">No related FSAs found for this territory.</p>');
+                        }
+                    },
+                    error: function(xhr, status, error) {
+                        console.error("Error fetching related FSAs:", error);
+                        console.error("XHR object:", xhr);
+                        $("#related-fsas-container").append('<p id="no-fsa-message" class="text-danger">Error loading FSAs. Check console for details.</p>');
+                    }
+                });
+            } else {
+                console.log("No territory ID available for selected item.");
+                $("#related-fsas-container").append('<p id="no-fsa-message">No territory selected or ID available.</p>');
+            }
             return false;
         }
     });

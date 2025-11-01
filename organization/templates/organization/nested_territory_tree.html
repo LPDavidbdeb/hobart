@@ -1,0 +1,200 @@
+{% extends 'base.html' %}
+
+{% block title %}Territory Tree Visualization{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <h2>Territory Tree Visualization</h2>
+    <p>Click on nodes to expand or collapse them.</p>
+    <div id="tree-container"></div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://d3js.org/d3.v7.min.js"></script>
+<style>
+    .node circle {
+        fill: #fff;
+        stroke: steelblue;
+        stroke-width: 2px;
+    }
+
+    .node text {
+        font: 12px sans-serif;
+    }
+
+    .link {
+        fill: none;
+        stroke: #ccc;
+        stroke-opacity: 0.4;
+        stroke-width: 1.5px;
+    }
+</style>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const width = 1200;
+    const margin = {top: 20, right: 120, bottom: 20, left: 120};
+    const dy = width / 6;
+    const dx = 20;
+
+    const treeLayout = d3.tree().nodeSize([dx, dy]);
+    const diagonal = d3.linkHorizontal().x(d => d.y).y(d => d.x);
+
+    const svg = d3.select("#tree-container").append("svg")
+        .attr("width", width)
+        .attr("height", dx)
+        .attr("viewBox", [-margin.left, -margin.top, width, dx])
+        .style("font", "10px sans-serif")
+        .style("user-select", "none");
+
+    const gLink = svg.append("g")
+        .attr("fill", "none")
+        .attr("stroke", "#555")
+        .attr("stroke-opacity", 0.4)
+        .attr("stroke-width", 1.5);
+
+    const gNode = svg.append("g")
+        .attr("cursor", "pointer")
+        .attr("pointer-events", "all");
+
+    let root;
+    let i = 0; // Counter for node IDs
+
+    // Fetch initial data (root node and its immediate children)
+    d3.json("{% url 'organization:nested_territory_json_api' %}").then(initialTreeData => {
+        console.log("Initial data from server:", initialTreeData);
+        root = d3.hierarchy(initialTreeData, d => d.children);
+        root.x0 = dx / 2;
+        root.y0 = 0;
+
+        // Ensure initial children are visible (provinces)
+        if (root.children) {
+            root.children.forEach(d => {
+                d.id = ++i; // Assign ID
+                d._children = d.children; // Store children for collapsing
+                d.children = d._children; // Keep them expanded initially
+            });
+        }
+        update(root);
+    });
+
+    function update(source) {
+        const duration = d3.event && d3.event.altKey ? 2500 : 250;
+        const nodes = root.descendants().reverse();
+        const links = root.links();
+
+        // Compute the new tree layout.
+        treeLayout(root);
+
+        let left = root;
+        let right = root;
+        root.eachBefore(node => {
+            if (node.x < left.x) left = node;
+            if (node.x > right.x) right = node;
+        });
+
+        const height = right.x - left.x + margin.top + margin.bottom;
+
+        const transition = svg.transition()
+            .duration(duration)
+            .attr("height", height)
+            .attr("viewBox", [-margin.left, left.x - margin.top, width, height])
+            .tween("resize", window.ResizeObserver ? null : () => () => svg.dispatch("toggle"));
+
+        // Update the nodes…
+        const node = gNode.selectAll("g")
+            .data(nodes, d => d.id);
+
+        // Enter any new nodes at the parent's previous position.
+        const nodeEnter = node.enter().append("g")
+            .attr("transform", d => `translate(${source.y0},${source.x0})`)
+            .attr("fill-opacity", 0)
+            .attr("stroke-opacity", 0)
+            .on("click", (event, d) => {
+                // If node has children, toggle them
+                if (d.children) {
+                    d._children = d.children;
+                    d.children = null;
+                    update(d);
+                } else if (d._children) { // If children are collapsed, expand them
+                    d.children = d._children;
+                    d._children = null;
+                    update(d);
+                } else if (d.data.hasChildren) { // If no children loaded, but API says it has children
+                    // Make AJAX call to load children
+                    d3.json("{% url 'organization:nested_territory_json_api' %}?node_id=" + d.data.id).then(function(childrenData) {
+                        console.log("Children data from server:", childrenData);
+                        // Create new hierarchy nodes for the loaded children
+                        d.children = childrenData.map(child => d3.hierarchy(child));
+                        d.children.forEach(child => {
+                            child.parent = d; // Manually set parent
+                            child.depth = d.depth + 1; // Manually set depth
+                            child.id = ++i; // Assign unique ID
+                            if (child.data.hasChildren) {
+                                child._children = child.children; // Store for future collapsing
+                                child.children = null; // Keep them collapsed initially
+                            }
+                        });
+                        update(d);
+                    });
+                }
+            });
+
+        nodeEnter.append("circle")
+            .attr("r", 2.5)
+            .attr("fill", d => d._children ? "#555" : "#999")
+            .attr("stroke-width", 10);
+
+        nodeEnter.append("text")
+            .attr("dy", "0.31em")
+            .attr("x", -10) // Reduced spacing
+            .attr("text-anchor", "end") // Anchor text at the end (right-align)
+            .text(d => d.data.name)
+            .clone(true).lower()
+            .attr("stroke-linejoin", "round")
+            .attr("stroke-width", 3)
+            .attr("stroke", "white");
+
+        // Transition nodes to their new position.
+        node.merge(nodeEnter).transition(transition)
+            .attr("transform", d => `translate(${d.y},${d.x})`)
+            .attr("fill-opacity", 1)
+            .attr("stroke-opacity", 1);
+
+        // Transition exiting nodes to the parent's new position.
+        node.exit().transition(transition).remove()
+            .attr("transform", d => `translate(${source.y},${source.x})`)
+            .attr("fill-opacity", 0)
+            .attr("stroke-opacity", 0);
+
+        // Update the links…
+        const link = gLink.selectAll("path")
+            .data(links, d => d.target.id);
+
+        // Enter any new links at the parent's previous position.
+        const linkEnter = link.enter().append("path")
+            .attr("d", d => {
+                const o = {x: source.x0, y: source.y0};
+                return diagonal({source: o, target: o});
+            });
+
+        // Transition links to their new position.
+        link.merge(linkEnter).transition(transition)
+            .attr("d", diagonal);
+
+        // Transition exiting nodes to the parent's new position.
+        link.exit().transition(transition).remove()
+            .attr("d", d => {
+                const o = {x: source.x, y: source.y};
+                return diagonal({source: o, target: o});
+            });
+
+        // Stash the old positions for transition.
+        root.eachBefore(d => {
+            d.x0 = d.x;
+            d.y0 = d.y;
+        });
+    }
+});
+</script>
+{% endblock %}

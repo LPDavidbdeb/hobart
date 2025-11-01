@@ -3,11 +3,12 @@ import json
 from django.http import JsonResponse
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
-from django.shortcuts import get_object_or_404, redirect, render # Add render
-from django.views.generic import ListView, View # Add View
+from django.shortcuts import get_object_or_404, redirect, render
+from django.views.generic import ListView, View
 from django.contrib import messages
 from django.db.models import Q
-from .models import Address, AddressValidationLog, AddressStatus, FSA # Add FSA
+from .models import Address, AddressValidationLog, AddressStatus, FSA
+from organization.models import NestedTerritory # Import NestedTerritory
 from .utils import run_address_validation_batch
 from employees.models import EmployeeProfile
 from client.models import Client
@@ -26,7 +27,21 @@ class FSASearchView(LoginRequiredMixin, UserPassesTestMixin, View):
         return self.request.user.is_superuser
 
     def get(self, request, *args, **kwargs):
-        return render(request, self.template_name)
+        query = request.GET.get('q', '')
+        territories = []
+        if query:
+            # Search NestedTerritory excluding FSA, POSTAL_CODE, and ADDRESS types
+            territories = NestedTerritory.objects.filter(
+                Q(name__icontains=query)
+            ).exclude(
+                type__in=[
+                    NestedTerritory.TerritoryType.FSA,
+                    NestedTerritory.TerritoryType.POSTAL_CODE,
+                    NestedTerritory.TerritoryType.ADDRESS
+                ]
+            ).order_by('name')[:20] # Limit results for display
+
+        return render(request, self.template_name, {'territories': territories, 'query': query})
 
 # --- Dashboard View ---
 class AddressHealthDashboardView(LoginRequiredMixin, UserPassesTestMixin, ListView):
@@ -66,18 +81,47 @@ def fsa_autocomplete_api(request):
     if len(query) < 2: # Don't search for less than 2 characters
         return JsonResponse([], safe=False)
 
-    # For Phase 1, search all FSAs
-    fsas = FSA.objects.filter(description__icontains=query)[:10]
-    
+    # Search NestedTerritory excluding FSA, POSTAL_CODE, and ADDRESS types
+    territories = NestedTerritory.objects.filter(
+        Q(name__icontains=query)
+    ).exclude(
+        type__in=[
+            NestedTerritory.TerritoryType.FSA,
+            NestedTerritory.TerritoryType.POSTAL_CODE,
+            NestedTerritory.TerritoryType.ADDRESS
+        ]
+    ).order_by('name')
+
     results = [
         {
-            'id': fsa.id,
-            'label': f"{fsa.code} - {fsa.description}", # For jQuery UI Autocomplete
-            'value': fsa.code # The value to put in the search box
+            'id': territory.id,
+            'label': f"{territory.name} ({territory.get_type_display()}) - Clients: {territory.client_count}",
+            'value': territory.name # The value to put in the search box
         }
-        for fsa in fsas
+        for territory in territories
     ]
     return JsonResponse(results, safe=False)
+
+@login_required
+def get_territory_fsas_api(request, territory_id):
+    if not request.user.is_superuser:
+        return JsonResponse({'error': 'Permission denied.'}, status=403)
+
+    try:
+        territory = get_object_or_404(NestedTerritory, pk=territory_id)
+        # Get all descendants that are of type FSA
+        fsa_territories = territory.get_descendants().filter(type=NestedTerritory.TerritoryType.FSA)
+        
+        fsas_data = [
+            {
+                'name': fsa.name,
+                'client_count': fsa.client_count
+            }
+            for fsa in fsa_territories
+        ]
+        return JsonResponse(fsas_data, safe=False)
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
 
 @login_required
 def search_address_api(request):

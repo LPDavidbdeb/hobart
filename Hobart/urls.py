@@ -13,6 +13,7 @@ urlpatterns = [
     path('clients/', include('client.urls', namespace='client')),
     path('users/', include('users.urls', namespace='users')),
     path('address/', include('address.urls', namespace='address')),
+    path('organization/', include('organization.urls', namespace='organization')),
     path('', include('core.urls', namespace='core')), # Added core app URLs
 
     # Project-level views

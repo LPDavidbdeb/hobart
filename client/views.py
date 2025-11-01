@@ -1,7 +1,7 @@
 import csv
 import io
 import json
-import os # Added this line
+import os
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required, user_passes_test
@@ -11,13 +11,14 @@ from django.urls import reverse_lazy
 from django.http import JsonResponse
 from django.db.models import Q, Func, F, Value
 from django.db.models.functions import Length
-from django.template.loader import render_to_string # Import render_to_string
+from django.template.loader import render_to_string
 from .models import Client, ClientGroup, IndustryCode, CustomerTypeCode, IndustrySubCode, Territory
 from .forms import CsvUploadForm, DimensionUploadForm, ClientUploadForm, ClientGroupForm, ClientAddressEditForm
 from employees.models import EmployeeProfile
 from address.models import Address, AddressStatus
-from address.forms import AddressSearchForm # Import the AddressSearchForm
-from DAO.adresses_DAO import GoogleMapsClient # Import GoogleMapsClient for re-geocoding
+from address.forms import AddressSearchForm
+from DAO.adresses_DAO import GoogleMapsClient
+from .utils import update_client_address_from_place_details # Import the new utility function
 
 # --- Permissions --- 
 def is_admin_or_director(user):
@@ -45,12 +46,24 @@ class ClientDetailView(LoginRequiredMixin, UserPassesTestMixin, DetailView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context['address_search_form'] = AddressSearchForm() # For the Google Maps autocomplete
-        context['client_address_edit_form'] = ClientAddressEditForm(instance=self.object) # For manual address editing
+        context['address_search_form'] = AddressSearchForm()
+        context['client_address_edit_form'] = ClientAddressEditForm(instance=self.object)
+        context['google_maps_api_key'] = os.environ.get('GOOGLE_MAPS_API_KEY')
+
+        if self.object.address and self.object.address.raw_response:
+            raw_data = self.object.address.raw_response
+            context['business_name'] = raw_data.get('name')
+            context['website'] = raw_data.get('website')
+            
+            opening_hours = raw_data.get('opening_hours')
+            if opening_hours:
+                context['open_now'] = opening_hours.get('open_now')
+                context['weekday_text'] = opening_hours.get('weekday_text')
+
         return context
 
     def post(self, request, *args, **kwargs):
-        self.object = self.get_object() # Get the client instance
+        self.object = self.get_object()
         form = ClientAddressEditForm(request.POST, instance=self.object)
         if form.is_valid():
             form.save()
@@ -69,7 +82,6 @@ class ClientDetailView(LoginRequiredMixin, UserPassesTestMixin, DetailView):
                 address_obj, created = Address.save_from_google_maps_data(results[0])
                 self.object.address = address_obj
                 
-                # Re-evaluate and set the address status
                 if address_obj.is_degenerate():
                     status_obj = AddressStatus.objects.get(name='INCOMPLETE')
                 else:
@@ -79,20 +91,18 @@ class ClientDetailView(LoginRequiredMixin, UserPassesTestMixin, DetailView):
                 self.object.save(update_fields=['address', 'address_status'])
                 messages.success(request, "Client's geocoded address updated based on new original fields.")
             else:
-                # If geocoding fails, set status to MISSING
                 self.object.address = None
                 self.object.address_status = AddressStatus.objects.get(name='MISSING')
                 self.object.save(update_fields=['address', 'address_status'])
                 messages.warning(request, "Could not re-geocode address based on updated original fields. The address has been marked as MISSING.")
 
-            return redirect(self.object.get_absolute_url()) # Redirect back to the client detail page
+            return redirect(self.object.get_absolute_url())
         else:
             messages.error(request, "Error updating client's original address fields.")
-            context = self.get_context_data(form=form) # Pass the invalid form back to the template
+            context = self.get_context_data(form=form)
             return self.render_to_response(context)
 
 class ClientAddressValidationListView(LoginRequiredMixin, UserPassesTestMixin, ListView):
-    """A view to list clients with degenerate addresses that need manual correction."""
     model = Client
     template_name = 'client/address_validation_list.html'
     context_object_name = 'clients'
@@ -137,13 +147,11 @@ class ClientMapView(LoginRequiredMixin, UserPassesTestMixin, View):
         return is_admin_or_director(self.request.user)
 
     def get(self, request, *args, **kwargs):
-        # Fetch clients that have a geocoded address with latitude and longitude
         clients_with_coords = Client.objects.filter(
             address__latitude__isnull=False,
             address__longitude__isnull=False
         ).select_related('address').values('name', 'address__latitude', 'address__longitude')
 
-        # Prepare data for JavaScript
         client_locations = [
             {
                 'name': client['name'],
@@ -153,7 +161,6 @@ class ClientMapView(LoginRequiredMixin, UserPassesTestMixin, View):
             for client in clients_with_coords
         ]
         
-        # Pass Google Maps API Key to the template
         google_maps_api_key = os.environ.get('GOOGLE_MAPS_API_KEY')
 
         context = {
@@ -241,7 +248,7 @@ def upload_client_group_view(request):
             messages.success(request, 'Client Group data imported successfully!')
         except Exception as e:
             messages.error(request, f'An error occurred: {e}')
-        return redirect('client:upload_group_csv')
+        return redirect('client:upload_csv')
     return render(request, 'client/upload_csv.html', {'form': form})
 
 # --- CSV Processing Logic ---
@@ -249,10 +256,13 @@ def process_client_csv(file):
     decoded_file = file.read().decode('utf-8-sig')
     io_string = io.StringIO(decoded_file)
     reader = csv.reader(io_string, delimiter=',')
+    # Skip header
+    next(reader, None)
+
     territories = {t.code: t for t in Territory.objects.all()}
     industry_codes = {ic.code: ic for ic in IndustryCode.objects.all()}
     customer_type_codes = {ctc.code: ctc for ctc in CustomerTypeCode.objects.all()}
-    industry_sub_codes = {isc.code: isc for isc in IndustrySubCode.objects.all()}
+    industry_sub_codes = {isc.code: isc for isc in IndustrySub_Code.objects.all()}
     client_groups = {cg.code: cg for cg in ClientGroup.objects.all()}
     gmaps_client = GoogleMapsClient()
 
@@ -273,22 +283,39 @@ def process_client_csv(file):
                 'industry_sub_code': industry_sub_codes.get(ind_sub_code),
             })
 
-        # --- Automated Geocoding Logic ---
+        # --- Automated Geocoding Logic (Updated to prioritize Place Details) ---
         full_address_string = f"{addr1}, {addr2}, {postal}"
-        results = gmaps_client.geocode(full_address_string)
         address_obj = None
-        if results:
-            address_obj, _ = Address.save_from_google_maps_data(results[0])
+        place_id = None
 
-        is_degenerate = not address_obj or address_obj.is_degenerate()
-        if is_degenerate:
-            place_search_results = gmaps_client.place_search(client_group_obj.name, full_address_string)
-            if place_search_results:
-                address_obj, _ = Address.save_from_google_maps_data(place_search_results[0])
-
-        if address_obj:
-            client.address = address_obj
-            client.save(update_fields=['address'])
+        # 1. Try to find a place_id using place_search (business name + address)
+        #    This is the primary way to get a place_id for a business
+        place_search_results = gmaps_client.place_search(client_name, full_address_string) # Use client_name for business search
+        if place_search_results:
+            place_id = place_search_results[0].get('place_id')
+        
+        # 2. If a place_id was found, get full Place Details and update client address
+        if place_id:
+            try:
+                client = update_client_address_from_place_details(client, place_id)
+            except ValueError as e:
+                messages.warning(f"Client {client.account_number}: {e}")
+        else:
+            # 3. If no place_id from business search, fall back to generic geocoding
+            geocode_results = gmaps_client.geocode(full_address_string)
+            if geocode_results:
+                address_obj, _ = Address.save_from_google_maps_data(geocode_results[0])
+                client.address = address_obj
+                if address_obj.is_degenerate():
+                    client.address_status = AddressStatus.objects.get(name='INCOMPLETE')
+                else:
+                    client.address_status = AddressStatus.objects.get(name='COMPLETE')
+                client.save(update_fields=['address', 'address_status'])
+            else:
+                # 4. If nothing works, mark as MISSING
+                client.address = None
+                client.address_status = AddressStatus.objects.get(name='MISSING')
+                client.save(update_fields=['address', 'address_status'])
 
 def process_dimension_csv(file, dimension_type):
     decoded_file = file.read().decode('utf-8-sig')

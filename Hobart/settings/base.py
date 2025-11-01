@@ -31,14 +31,16 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'django.contrib.gis', # Added for GeoDjango
 
     'django_bootstrap5',
     'django_extensions',
+    'mptt', # Added django-mptt
 
     'users',
     'employees',
+    'address', # Moved address before client
     'client',  # Added the new client app
-    'address', # Added the address app
     'organization', # Added the organization app
     'core',
 ]
