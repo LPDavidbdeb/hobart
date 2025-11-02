@@ -10,6 +10,9 @@ WORKDIR /app
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
+    # GeoDjango dependencies
+    gdal-bin \
+    libgdal-dev \
     # psycopg2 dependencies
     libpq-dev \
     # other dependencies

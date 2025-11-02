@@ -16,7 +16,7 @@ def login_view(request):
 
 def logout_view(request):
     logout(request)
-    return redirect('home')
+    return redirect('/')
 
 @login_required
 def personalized_home_view(request):

@@ -4,7 +4,20 @@
 
 {% block content %}
 <div class="container-fluid mt-4">
-    <h2>Territory Tree Visualization</h2>
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h2>Territory Tree Visualization</h2>
+
+        {% if tree_names %}
+        <div class="form-group mb-0" style="min-width: 250px;">
+            <label for="tree-select" class="font-weight-bold">Select Hierarchy:</label>
+            <select class="form-control" id="tree-select">
+                {% for name in tree_names %}
+                    <option value="{{ name }}">{{ name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        {% endif %}
+        </div>
     <p>Click on nodes to expand or collapse them.</p>
     <div id="tree-container"></div>
 </div>
@@ -14,13 +27,15 @@
 <script src="https://d3js.org/d3.v7.min.js"></script>
 <style>
     .node circle {
-        fill: #fff;
         stroke: steelblue;
         stroke-width: 2px;
     }
 
     .node text {
         font: 12px sans-serif;
+        /* --- PERFORMANCE FIX --- */
+        /* This CSS outline is much faster than cloning the text element */
+        text-shadow: 0 1px 0 #fff, 0 -1px 0 #fff, 1px 0 0 #fff, -1px 0 0 #fff;
     }
 
     .link {
@@ -59,27 +74,48 @@ document.addEventListener('DOMContentLoaded', function() {
 
     let root;
     let i = 0; // Counter for node IDs
+    const treeSelect = document.getElementById('tree-select');
 
-    // Fetch initial data (root node and its immediate children)
-    d3.json("{% url 'organization:nested_territory_json_api' %}").then(initialTreeData => {
-        console.log("Initial data from server:", initialTreeData);
-        root = d3.hierarchy(initialTreeData, d => d.children);
-        root.x0 = dx / 2;
-        root.y0 = 0;
+    function loadTree(treeName) {
+        // Clear the old tree
+        gLink.selectAll("*").remove();
+        gNode.selectAll("*").remove();
 
-        // Ensure initial children are visible (provinces)
-        if (root.children) {
-            root.children.forEach(d => {
-                d.id = ++i; // Assign ID
-                d._children = d.children; // Store children for collapsing
-                d.children = d._children; // Keep them expanded initially
-            });
-        }
-        update(root);
-    });
+        // Fetch new root data based on the selected treeName
+        d3.json(`{% url 'organization:nested_territory_json_api' %}?tree_name=${treeName}`).then(initialTreeData => {
+            console.log("Initial data for " + treeName + ":", initialTreeData);
 
-    function update(source) {
-        const duration = d3.event && d3.event.altKey ? 2500 : 250;
+            root = d3.hierarchy(initialTreeData);
+            root.x0 = dx / 2;
+            root.y0 = 0;
+            root.id = ++i; // Assign root ID
+
+            if (root.children) {
+                root.children.forEach(d => {
+                    d.id = ++i;
+                    if (d.data.hasChildren) {
+                        d.children = null; // Start collapsed
+                        d._children = null;
+                    }
+                });
+            }
+
+            update(root, null); // Pass null for the event on initial load
+        });
+    }
+
+    if (treeSelect) {
+        loadTree(treeSelect.value);
+        treeSelect.addEventListener('change', () => {
+            loadTree(treeSelect.value);
+        });
+    } else {
+        d3.select("#tree-container").text("No territory hierarchies found.");
+    }
+
+    function update(source, event) {
+        const duration = event && event.altKey ? 2500 : 250;
+
         const nodes = root.descendants().reverse();
         const links = root.links();
 
@@ -111,49 +147,55 @@ document.addEventListener('DOMContentLoaded', function() {
             .attr("fill-opacity", 0)
             .attr("stroke-opacity", 0)
             .on("click", (event, d) => {
-                // If node has children, toggle them
-                if (d.children) {
+                if (d.children) { // Node is expanded, collapse it
                     d._children = d.children;
                     d.children = null;
-                    update(d);
-                } else if (d._children) { // If children are collapsed, expand them
+                    update(d, event);
+                } else if (d._children) { // Node is collapsed, expand it
                     d.children = d._children;
                     d._children = null;
-                    update(d);
-                } else if (d.data.hasChildren) { // If no children loaded, but API says it has children
-                    // Make AJAX call to load children
+                    update(d, event);
+                } else if (d.data.hasChildren) { // Node has unloaded children, fetch them
                     d3.json("{% url 'organization:nested_territory_json_api' %}?node_id=" + d.data.id).then(function(childrenData) {
                         console.log("Children data from server:", childrenData);
-                        // Create new hierarchy nodes for the loaded children
-                        d.children = childrenData.map(child => d3.hierarchy(child));
-                        d.children.forEach(child => {
-                            child.parent = d; // Manually set parent
-                            child.depth = d.depth + 1; // Manually set depth
-                            child.id = ++i; // Assign unique ID
-                            if (child.data.hasChildren) {
-                                child._children = child.children; // Store for future collapsing
-                                child.children = null; // Keep them collapsed initially
+
+                        d.children = childrenData.map(childData => {
+                            const childNode = d3.hierarchy(childData);
+                            childNode.parent = d;
+                            childNode.depth = d.depth + 1;
+                            childNode.id = ++i;
+
+                            if (childNode.data.hasChildren) {
+                                childNode.children = null;
+                                childNode._children = null;
                             }
+                            return childNode;
                         });
-                        update(d);
+
+                        update(d, event); // Redraw with the new children
                     });
                 }
             });
 
         nodeEnter.append("circle")
             .attr("r", 2.5)
-            .attr("fill", d => d._children ? "#555" : "#999")
-            .attr("stroke-width", 10);
+            .attr("fill", d => {
+                if (d.children) return "#fff"; // Expanded: white fill
+                if (d._children) return "#555"; // Collapsed with loaded data: dark fill
+                if (d.data.hasChildren) return "steelblue"; // Collapsed with unloaded data: blue fill
+                return "#fff"; // True leaf: white fill
+            })
+            .attr("stroke", "steelblue")
+            .attr("stroke-width", 2);
 
+        // --- PERFORMANCE FIX ---
+        // Removed the slow .clone() block. The text outline is now
+        // handled by the CSS `text-shadow` property.
         nodeEnter.append("text")
             .attr("dy", "0.31em")
-            .attr("x", -10) // Reduced spacing
-            .attr("text-anchor", "end") // Anchor text at the end (right-align)
-            .text(d => d.data.name)
-            .clone(true).lower()
-            .attr("stroke-linejoin", "round")
-            .attr("stroke-width", 3)
-            .attr("stroke", "white");
+            .attr("x", -10)
+            .attr("text-anchor", "end")
+            .text(d => d.data.name);
 
         // Transition nodes to their new position.
         node.merge(nodeEnter).transition(transition)

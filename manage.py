@@ -2,10 +2,13 @@
 """Django's command-line utility for administrative tasks."""
 import os
 import sys
-
+from dotenv import load_dotenv
 
 def main():
     """Run administrative tasks."""
+    # Load environment variables from .env file
+    load_dotenv()
+    
     # Default to the postgres settings
     os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'Hobart.settings.postgres')
     try:

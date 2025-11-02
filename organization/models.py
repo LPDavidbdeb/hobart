@@ -1,6 +1,6 @@
 from django.contrib.gis.db import models as gis_models
 from mptt.models import MPTTModel, TreeForeignKey
-from address.models import FSA # Only FSA is needed now
+# from address.models import FSA # This direct import causes a circular dependency
 
 # --- New Hierarchical Model ---
 class NestedTerritory(MPTTModel):
@@ -74,7 +74,7 @@ class Territory(gis_models.Model):
 
     name = gis_models.CharField(max_length=100, db_index=True)
     type = gis_models.CharField(max_length=20, choices=TerritoryType.choices, db_index=True)
-    fsas = gis_models.ManyToManyField(FSA, blank=True, related_name='territories', help_text="The FSAs that define this territory.")
+    fsas = gis_models.ManyToManyField('address.FSA', blank=True, related_name='territories', help_text="The FSAs that define this territory.")
     boundary_geojson = gis_models.JSONField(null=True, blank=True, help_text="GeoJSON representation of the territory's boundary.")
 
     class Meta:

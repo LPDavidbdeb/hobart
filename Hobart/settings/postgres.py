@@ -12,9 +12,16 @@ ALLOWED_HOSTS = ['127.0.0.1', 'localhost']
 SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY', 'django-insecure-postgres-development-key')
 
 # --- GeoDjango Configuration ---
-# Explicitly point to the GDAL and GEOS libraries within Postgres.app
-GDAL_LIBRARY_PATH = '/Applications/Postgres.app/Contents/Versions/latest/lib/libgdal.dylib'
-GEOS_LIBRARY_PATH = '/Applications/Postgres.app/Contents/Versions/latest/lib/libgeos_c.dylib'
+# For local development (e.g., on macOS with Postgres.app), you can set
+# these environment variables. In Docker, they will be unset, and GeoDjango
+# will find the libraries in the standard system path.
+gdal_lib_path = os.environ.get('GDAL_LIBRARY_PATH')
+geos_lib_path = os.environ.get('GEOS_LIBRARY_PATH')
+
+if gdal_lib_path:
+    GDAL_LIBRARY_PATH = gdal_lib_path
+if geos_lib_path:
+    GEOS_LIBRARY_PATH = geos_lib_path
 
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
