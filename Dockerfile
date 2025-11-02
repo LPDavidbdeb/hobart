@@ -2,13 +2,15 @@
 FROM python:3.11-slim
 
 # Set environment variables
-ENV PYTHONDONTWRITEBYTECODE 1
-ENV PYTHONUNBUFFERED 1
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
 
 # Set the working directory in the container
 WORKDIR /app
 
 # Install system dependencies
+# Set DEBIAN_FRONTEND to noninteractive to suppress debconf warnings
+ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y --no-install-recommends \
     # GeoDjango dependencies
     gdal-bin \

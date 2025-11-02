@@ -50,4 +50,5 @@ jobs:
             --set-secrets="DJANGO_SECRET_KEY=django_secret_key:latest" \
             --set-secrets="GOOGLE_MAPS_API_KEY=google_maps_api_key:latest" \
             --set-secrets="DATABASE_URL=database_url:latest" \
+            --set-secrets="DJANGO_ALLOWED_HOSTS=django_allowed_hosts:latest" \
             --add-cloudsql-instances hobart-476116:us-central1:hobart-postgres-db
