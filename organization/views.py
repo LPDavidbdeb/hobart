@@ -11,28 +11,36 @@ def territory_explorer_page(request):
     """
     Renders the main page with the D3 visualization.
     """
-    tree_names = list(NestedTerritory.objects
-                      .values_list('tree_name', flat=True)
-                      .distinct()
-                      .order_by('tree_name'))
+    # --- NEW: Get root nodes (level=0) for the dropdown ---
+    root_territories = list(NestedTerritory.objects
+                            .filter(level=0)
+                            .values_list('name', flat=True)
+                            .order_by('name'))
 
-    default_tree = tree_names[0] if tree_names else 'Default'
-
-    # --- THIS IS THE CHANGE ---
-    # Check if a tree is specified in the URL, otherwise use default
-    selected_tree = request.GET.get('tree', default_tree)
-    # --- END OF CHANGE ---
+    # Determine the default and selected tree from the root territory names
+    default_root_name = root_territories[0] if root_territories else None
+    selected_root_name = request.GET.get('tree', default_root_name)
+    # --- END NEW ---
 
     initial_nodes = []
-    # Find the root node for the *selected* tree
-    root_node = NestedTerritory.objects.filter(tree_name=selected_tree, level=0).first()
+    # Find the root node based on the *selected name*
+    root_node = NestedTerritory.objects.filter(name=selected_root_name, level=0).first()
 
     if root_node:
-        initial_nodes = [node.to_json() for node in root_node.get_children()]
+        # If the root itself has children, display them. Otherwise, display the root.
+        children = root_node.get_children()
+        if children:
+            initial_nodes = [node.to_json() for node in children]
+        else:
+            # If the root is a leaf (like 'Yukon'), it has no children to show,
+            # so we show the node itself in the visualization.
+            initial_nodes = [root_node.to_json()]
 
     return render(request, 'organization/territory_explorer.html', {
-        'tree_names': tree_names,
-        'default_tree': selected_tree,  # Pass the selected tree as the default
+        # Pass the list of root names to the template
+        'tree_names': root_territories,
+        # Pass the selected root name as the default
+        'default_tree': selected_root_name,
         'initial_data_json': json.dumps(initial_nodes),
     })
 

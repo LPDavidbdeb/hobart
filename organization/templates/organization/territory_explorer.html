@@ -263,26 +263,31 @@
             }
         }
 
-        // --- 4. Initial Render (HYBRID) ---
+        // --- 4. Initial Render (Robust) ---
         if(root) {
-            // --- MODIFIED --- Use dx, from SCRIPT 1
             root.x0 = dx / 2;
             root.y0 = 0;
 
             if (root.children) {
+                // Case 1: Superuser. 'root' is virtual and has 'children' (provinces).
+                // We collapse them.
                 root.children.forEach(child => {
-                    child.id = ++i; // --- MODIFIED --- Add D3's internal ID
-                    // Set up for lazy loading
+                    child.id = ++i;
                     if (child.data.has_children) {
                         child.children = null;
                         child._children = null;
                     }
                 });
+            } else if (root.data.has_children) {
+                // Case 2: Restricted user. 'root' is real (e.g., "Quebec").
+                // It has no 'children' loaded yet, so we just set it as collapsed.
+                root.children = null;
+                root._children = null;
             }
-            // --- MODIFIED --- Pass null event
-            update(root, null);
-        }
+            // Case 3: A leaf node. Both are null, nothing to do.
 
+            update(root, null); // Start the visualization
+        }
         // --- 5. Handle <select> menu change (FROM SCRIPT 2) ---
         // This is the correct logic for your new API
         d3.select("#tree-select").on("change", async function() {

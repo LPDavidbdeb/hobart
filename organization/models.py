@@ -60,7 +60,7 @@ class NestedTerritory(MPTTModel):
         """
         return {
             'id': self.id,
-            'name': f"{self.name} ({self.type})",
+            'name': self.name,
             'db_name': self.name,
             'type': self.type,
             'tree_name': self.tree_name,

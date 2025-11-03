@@ -5,17 +5,27 @@ from django.contrib.gis.geos import Point
 # from organization.models import NestedTerritory # <-- 1. REMOVED this import
 
 class FSA(gis_models.Model):
-    code = gis_models.CharField(max_length=50, unique=True, db_index=True, help_text="The unique code for this FSA.")
-    description = gis_models.CharField(max_length=255, blank=True, help_text="A description for this FSA (e.g., city/region).")
+    """
+    Represents a Forward Sortation Area (FSA), the first three characters of a Canadian postal code.
+    This model is designed to store geographic boundary data from Statistics Canada's
+    Census Forward Sortation Area Boundary File.
+    """
+    code = gis_models.CharField(max_length=3, unique=True, db_index=True, help_text="The 3-character Forward Sortation Area code (e.g., H2X).")
+    cfsa_uid = gis_models.CharField(max_length=10, unique=True, null=True, blank=True, db_index=True, help_text="Census Forward Sortation Area Unique Identifier (CFSAUID).")
+    pruid = gis_models.CharField(max_length=4, db_index=True, null=True, blank=True, help_text="Unique identifier for the province or territory (PRUID).")
+    land_area = gis_models.FloatField(null=True, blank=True, help_text="Land area in square kilometers.")
+    boundary = gis_models.MultiPolygonField(srid=4326, null=True, blank=True, help_text="The geographic boundary of the FSA.")
+    census_year = gis_models.PositiveIntegerField(null=True, blank=True, db_index=True, help_text="The census year the data is from (e.g., 2021).")
+    description = gis_models.CharField(max_length=255, blank=True, help_text="A description for this FSA, which may be imported from external sources.")
 
     class Meta:
-        verbose_name = "FSA"
-        verbose_name_plural = "FSAs"
+        verbose_name = "Forward Sortation Area (FSA)"
+        verbose_name_plural = "Forward Sortation Areas (FSAs)"
         ordering = ['code']
         app_label = 'address'
 
     def __str__(self):
-        return f"{self.code} - {self.description}" if self.description else self.code
+        return self.code
 
 class AddressStatus(gis_models.Model):
     name = gis_models.CharField(max_length=50, unique=True)

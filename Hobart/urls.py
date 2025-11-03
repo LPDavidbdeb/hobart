@@ -19,11 +19,11 @@ urlpatterns = [
     path('users/', include('users.urls')),
     path('address/', include('address.urls')),
     path('organization/', include('organization.urls')),
-    path('', include('core.urls')), # Added core app URLs
+    path('core/', include('core.urls')), # core app URLs moved to /core/
 
     # Project-level views
-    path('login/', views.login_view, name='login'),
     path('logout/', views.logout_view, name='logout'),
     path('home/', views.personalized_home_view, name='personalized_home'),
-    # Note: The root path '' is now handled by the core app.
+    # The root path '' is now the login page.
+    path('', views.login_view, name='login'),
 ]

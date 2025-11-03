@@ -4,8 +4,89 @@
 {% block content %}
   <h1>Welcome, {{ user.username }}!</h1>
   <p>This is your personalized page.</p>
-  <form action="{% url 'logout' %}" method="post">
+
+  <div class="row">
+    {% if user.is_superuser %}
+    <!-- Employees Card -->
+    <div class="col-md-4 mb-4">
+      <div class="card">
+        <div class="card-body">
+          <h5 class="card-title">Employees</h5>
+          <p class="card-text">Manage employee information.</p>
+        </div>
+        <ul class="list-group list-group-flush">
+          <a href="{% url 'employees:director_list' %}" class="list-group-item list-group-item-action">Director List</a>
+          <a href="{% url 'employees:manager_list' %}" class="list-group-item list-group-item-action">Manager List</a>
+          <a href="{% url 'employees:technician_list' %}" class="list-group-item list-group-item-action">Technician List</a>
+          <a href="{% url 'employees:employee_list' %}" class="list-group-item list-group-item-action">All Employee List</a>
+          <a href="{% url 'employees:upload_csv' %}" class="list-group-item list-group-item-action">Upload Employees</a>
+        </ul>
+      </div>
+    </div>
+
+    <!-- Clients Card -->
+    <div class="col-md-4 mb-4">
+      <div class="card">
+        <div class="card-body">
+          <h5 class="card-title">Clients</h5>
+          <p class="card-text">Manage client information and groups.</p>
+        </div>
+        <ul class="list-group list-group-flush">
+          <a href="{% url 'client:client_list' %}" class="list-group-item list-group-item-action">Client List</a>
+          <a href="{% url 'client:clientgroup_list' %}" class="list-group-item list-group-item-action">Client Group List</a>
+          <a href="{% url 'client:upload_group_csv' %}" class="list-group-item list-group-item-action">Upload Client Groups</a>
+          <a href="{% url 'client:upload_dimension' %}" class="list-group-item list-group-item-action">Upload Dimensions</a>
+          <a href="{% url 'client:upload_client' %}" class="list-group-item list-group-item-action">Upload Clients</a>
+        </ul>
+      </div>
+    </div>
+
+    <!-- Addresses Card -->
+    <div class="col-md-4 mb-4">
+      <div class="card">
+        <div class="card-body">
+          <h5 class="card-title">Addresses</h5>
+          <p class="card-text">Manage and validate addresses.</p>
+        </div>
+        <ul class="list-group list-group-flush">
+          <a href="{% url 'client:address_validation_list' %}" class="list-group-item list-group-item-action">Address Validation Queue</a>
+          <a href="{% url 'address:health_dashboard' %}" class="list-group-item list-group-item-action">Address Health Dashboard</a>
+        </ul>
+      </div>
+    </div>
+
+    <!-- Maps Card -->
+    <div class="col-md-4 mb-4">
+      <div class="card">
+        <div class="card-body">
+          <h5 class="card-title">Maps</h5>
+          <p class="card-text">View client and territory maps.</p>
+        </div>
+        <ul class="list-group list-group-flush">
+          <a href="{% url 'client:client_map' %}" class="list-group-item list-group-item-action">Client Map</a>
+        </ul>
+      </div>
+    </div>
+
+    <!-- Admin Card -->
+    <div class="col-md-4 mb-4">
+      <div class="card">
+        <div class="card-body">
+          <h5 class="card-title">Admin</h5>
+          <p class="card-text">Administrative tools and settings.</p>
+        </div>
+        <ul class="list-group list-group-flush">
+          <a href="{% url 'admin:index' %}" class="list-group-item list-group-item-action">Admin Center</a>
+          <a href="{% url 'organization:territory_explorer_page' %}" class="list-group-item list-group-item-action">Territory Explorer</a>
+          <a href="{% url 'employees:territory_assignment_upload' %}" class="list-group-item list-group-item-action">Assign Territories</a>
+        </ul>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+
+  <form action="{% url 'logout' %}" method="post" class="mt-4">
       {% csrf_token %}
-      {% bootstrap_button "Logout" button_type="submit" button_class="btn-primary" %}
+      {% bootstrap_button "Logout" button_type="submit" button_class="btn-danger" %}
   </form>
 {% endblock %}
