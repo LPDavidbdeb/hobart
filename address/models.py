@@ -1,8 +1,8 @@
 from django.conf import settings
 import decimal
+import re # Import the regular expression module
 from django.contrib.gis.db import models as gis_models
 from django.contrib.gis.geos import Point
-# from organization.models import NestedTerritory # <-- 1. REMOVED this import
 
 class FSA(gis_models.Model):
     """
@@ -10,13 +10,24 @@ class FSA(gis_models.Model):
     This model is designed to store geographic boundary data from Statistics Canada's
     Census Forward Sortation Area Boundary File.
     """
+    class Source(gis_models.TextChoices):
+        CENSUS = 'CENSUS', 'From Statistics Canada Census'
+        INFERRED = 'INFERRED', 'Inferred from Client Data'
+
+    class BoundaryType(gis_models.TextChoices):
+        OFFICIAL = 'OFFICIAL', 'Official Census Boundary'
+        INFERRED_CONVEX_HULL = 'INFERRED_CONVEX_HULL', 'Inferred from Client Points (Convex Hull)'
+
     code = gis_models.CharField(max_length=3, unique=True, db_index=True, help_text="The 3-character Forward Sortation Area code (e.g., H2X).")
-    cfsa_uid = gis_models.CharField(max_length=10, unique=True, null=True, blank=True, db_index=True, help_text="Census Forward Sortation Area Unique Identifier (CFSAUID).")
-    pruid = gis_models.CharField(max_length=4, db_index=True, null=True, blank=True, help_text="Unique identifier for the province or territory (PRUID).")
+    cfsa_uid = gis_models.CharField(max_length=21, unique=True, null=True, blank=True, db_index=True, help_text="Census Forward Sortation Area Unique Identifier (CFSAUID), which is the IDUGD.")
+    pruid = gis_models.CharField(max_length=2, db_index=True, null=True, blank=True, help_text="Unique identifier for the province or territory (PRUID).")
     land_area = gis_models.FloatField(null=True, blank=True, help_text="Land area in square kilometers.")
     boundary = gis_models.MultiPolygonField(srid=4326, null=True, blank=True, help_text="The geographic boundary of the FSA.")
     census_year = gis_models.PositiveIntegerField(null=True, blank=True, db_index=True, help_text="The census year the data is from (e.g., 2021).")
     description = gis_models.CharField(max_length=255, blank=True, help_text="A description for this FSA, which may be imported from external sources.")
+    client_count = gis_models.PositiveIntegerField(default=0, editable=False, help_text="Total number of active clients in this FSA.")
+    source = gis_models.CharField(max_length=20, choices=Source.choices, default=Source.CENSUS, db_index=True)
+    boundary_type = gis_models.CharField(max_length=30, choices=BoundaryType.choices, null=True, blank=True, db_index=True)
 
     class Meta:
         verbose_name = "Forward Sortation Area (FSA)"
@@ -74,7 +85,7 @@ class Address(gis_models.Model):
     location = gis_models.PointField(null=True, blank=True, srid=4326)
 
     territories = gis_models.ManyToManyField(
-        'organization.NestedTerritory', # <-- 2. Used a string here
+        'organization.NestedTerritory',
         blank=True,
         related_name="addresses",
         help_text="Links this address to all relevant territory nodes (e.g., its Postal Code, its FED, its City)."
@@ -82,11 +93,6 @@ class Address(gis_models.Model):
 
     # --- Standardized Properties (Abstraction Layer) ---
     def get_component(self, component_type, fallback_types=None):
-        """
-        Intelligently searches for a component in the raw_response JSON.
-        `component_type` is the desired type (e.g., 'locality').
-        `fallback_types` is an optional list of other types to try in order.
-        """
         if not self.raw_response or 'address_components' not in self.raw_response:
             return None
         
@@ -118,24 +124,35 @@ class Address(gis_models.Model):
 
     @property
     def postal_code(self):
-        return self.get_component('postal_code')
+        """
+        Finds the postal code from the address components and validates its format.
+        Returns a valid 6 or 7 character Canadian postal code, or None.
+        """
+        code = self.get_component('postal_code')
+        if not code:
+            return None
+        
+        # Regex to match a Canadian postal code format (e.g., A1A 1A1 or A1A1A1)
+        # It's flexible about the space.
+        match = re.search(r'^[A-Z]\d[A-Z][ -]?\d[A-Z]\d$', code.upper())
+        
+        if match:
+            return match.group(0).replace(' ', '') # Return the standardized 6-character code
+        return None
 
     def is_degenerate(self):
         """
-        Checks if the address is missing critical components using the intelligent properties.
-        A postal code is considered degenerate if it's missing or less than 6 characters.
+        Checks if the address is missing critical components. A postal code is now checked for validity.
         """
-        return not self.street_number or not self.route or not self.city or not self.postal_code or len(self.postal_code) < 6
+        # The postal_code property now returns None if it's invalid, so this check is simpler.
+        return not self.street_number or not self.route or not self.city or not self.postal_code
 
     def get_degeneracy_reasons(self):
-        """
-        Returns a list of human-readable reasons for why the address is degenerate.
-        """
         reasons = []
         if not self.street_number: reasons.append('Street Number')
         if not self.route: reasons.append('Street Name')
         if not self.city: reasons.append('City/Locality')
-        if not self.postal_code or len(self.postal_code) < 6: reasons.append('Postal Code')
+        if not self.postal_code: reasons.append('Valid Postal Code') # Updated reason
         return reasons
 
     @classmethod
@@ -147,10 +164,9 @@ class Address(gis_models.Model):
             'formatted': data.get('formatted_address'),
             'latitude': decimal.Decimal(data['geometry']['location']['lat']),
             'longitude': decimal.Decimal(data['geometry']['location']['lng']),
-            'raw_response': data, # Store the entire response
+            'raw_response': data,
         }
 
-        # Populate the new location PointField
         lat = data['geometry']['location']['lat']
         lng = data['geometry']['location']['lng']
         if lat is not None and lng is not None:

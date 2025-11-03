@@ -28,8 +28,6 @@ class Command(BaseCommand):
         self.stdout.write("Step 0: Identifying non-degenerate addresses...")
         non_degenerate_place_ids = set()
         degenerate_count = 0
-        # Iterate through Address objects that have a place_id
-        # and are not degenerate. We use .iterator() for potentially large datasets.
         for addr in Address.objects.filter(place_id__isnull=False).iterator():
             if not addr.is_degenerate():
                 non_degenerate_place_ids.add(addr.place_id)
@@ -41,22 +39,28 @@ class Command(BaseCommand):
 
         # Step 1: Set the count for all ADDRESS leaf nodes
         self.stdout.write("Step 1: Calculating counts for ADDRESS leaf nodes...")
-        address_nodes = NestedTerritory.objects.filter(type=NestedTerritory.TerritoryType.ADDRESS, source_address__isnull=False)
+        # Correctly filter for ADDRESS nodes that have at least one linked address.
+        address_nodes = NestedTerritory.objects.filter(type=NestedTerritory.TerritoryType.ADDRESS, addresses__isnull=False).distinct()
         nodes_to_update = []
         count = 0
         clients_found_in_step1 = 0
 
         for node in address_nodes.iterator():
+            # Get the first linked address for this node.
+            # For an ADDRESS-type territory, we assume there's only one.
+            source_address = node.addresses.first()
             current_node_client_count = 0
-            if node.source_address and node.source_address.place_id:
-                if node.source_address.place_id in non_degenerate_place_ids:
-                    current_node_client_count = Client.objects.filter(address__place_id=node.source_address.place_id).count()
+
+            if source_address and source_address.place_id:
+                if source_address.place_id in non_degenerate_place_ids:
+                    # Count clients linked to this specific address's place_id
+                    current_node_client_count = Client.objects.filter(address__place_id=source_address.place_id).count()
                     if current_node_client_count > 0:
                         clients_found_in_step1 += current_node_client_count
                         if verbose:
-                            self.stdout.write(f"      -> Node '{node.name}' (ID: {node.id}, PlaceID: {node.source_address.place_id}) has {current_node_client_count} clients.")
+                            self.stdout.write(f"      -> Node '{node.name}' (ID: {node.id}, PlaceID: {source_address.place_id}) has {current_node_client_count} clients.")
                 elif verbose:
-                    self.stdout.write(f"      -> Node '{node.name}' (ID: {node.id}, PlaceID: {node.source_address.place_id}) skipped (degenerate address).")
+                    self.stdout.write(f"      -> Node '{node.name}' (ID: {node.id}, PlaceID: {source_address.place_id}) skipped (degenerate address).")
             elif verbose:
                 self.stdout.write(f"      -> Node '{node.name}' (ID: {node.id}) skipped (missing source_address or place_id).")
             
@@ -80,8 +84,6 @@ class Command(BaseCommand):
 
         max_level = max_level_obj.level
         for level in range(max_level, -1, -1):
-            # For each node, sum the counts of its direct children
-            # IMPORTANT: Exclude ADDRESS type nodes from this update, as their client_count is set in Step 1.
             with connection.cursor() as cursor:
                 cursor.execute("""
                     UPDATE organization_nestedterritory AS parent
