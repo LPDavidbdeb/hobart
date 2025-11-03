@@ -116,8 +116,14 @@
             <h2 class="mb-0">Client Location</h2>
         </div>
         <div class="card-body">
-            {% if client.address_status.name == 'COMPLETE' and client.address.latitude and client.address.longitude and google_maps_api_key %}
-                <div id="map" style="height: 400px; width: 100%;"></div>
+            {% if client.address_status.name == 'COMPLETE' and client.address.latitude and client.address.longitude %}
+                <script>
+                    const mapLocations = {
+                        lat: "{{ client.address.latitude }}",
+                        lng: "{{ client.address.longitude }}"
+                    };
+                </script>
+                {% include 'map_display.html' %}
             {% else %}
                 <p class="text-muted">Map not available: Address is not complete or coordinates are missing.</p>
             {% endif %}
@@ -248,32 +254,4 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 });
 </script>
-
-{% if client.address_status.name == 'COMPLETE' and client.address.latitude and client.address.longitude and google_maps_api_key %}
-<script>
-    let map;
-    let marker;
-
-    async function initMap() {
-        const clientLat = parseFloat("{{ client.address.latitude }}");
-        const clientLng = parseFloat("{{ client.address.longitude }}");
-        const clientLocation = { lat: clientLat, lng: clientLng };
-
-        const { Map } = await google.maps.importLibrary("map");
-        const { AdvancedMarkerElement } = await google.maps.importLibrary("marker");
-
-        map = new Map(document.getElementById("map"), {
-            zoom: 15,
-            center: clientLocation,
-            mapId: "{{ client.pk }}"
-        });
-
-        marker = new AdvancedMarkerElement({
-            position: clientLocation,
-            map: map,
-        });
-    }
-</script>
-<script async defer src="https://maps.googleapis.com/maps/api/js?key={{ google_maps_api_key }}&callback=initMap&libraries=marker"></script>
-{% endif %}
 {% endblock %}

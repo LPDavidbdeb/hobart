@@ -45,12 +45,29 @@ class NestedTerritory(MPTTModel):
         order_insertion_by = ['name']
 
     class Meta:
-        unique_together = ('tree_name', 'parent', 'name', 'type')
+        # unique_together = ('tree_name', 'parent', 'name', 'type')
         verbose_name = "Nested Territory"
         verbose_name_plural = "Nested Territories"
 
     def __str__(self):
         return f"{self.name} ({self.tree_name})"
+
+    # --- ADD THIS METHOD ---
+    def to_json(self):
+        """
+        Serializes the node for D3.js.
+        'is_leaf_node()' is a very efficient MPTT method.
+        """
+        return {
+            'id': self.id,
+            'name': f"{self.name} ({self.type})",
+            'db_name': self.name,
+            'type': self.type,
+            'tree_name': self.tree_name,
+            # 'children' is null so D3 knows to fetch them if 'has_children' is true.
+            'children': None,
+            'has_children': not self.is_leaf_node()
+        }
 
 # --- Existing Models (Untouched) ---
 class CodeDimension(gis_models.Model):

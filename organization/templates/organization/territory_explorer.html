@@ -1,0 +1,296 @@
+{% extends "base.html" %}
+
+{% block title %}Territory Explorer{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <h2>Territory Explorer</h2>
+    <hr>
+
+    <div class="row">
+        <div class="col-md-3">
+            <label for="tree-select" class="form-label">Select Tree:</label>
+            <select id="tree-select" class="form-select">
+                {% for tree in tree_names %}
+                    <option value="{{ tree }}" {% if tree == default_tree %}selected{% endif %}>
+                        {{ tree|title }}
+                    </option>
+                {% endfor %}
+            </select>
+            <p class="form-text">Select a hierarchy to visualize.</p>
+        </div>
+    </div>
+
+    <div class="row mt-4">
+        <div class="col-12" style="border: 1px solid #ccc; background: #f8f8f8; overflow-x: auto;">
+            <svg id="tree-container"></svg>
+        </div>
+    </div>
+</div>
+
+<style>
+    .node circle {
+        stroke: steelblue;
+        stroke-width: 2px;
+    }
+
+    .node text {
+        font: 12px sans-serif;
+        /* This CSS outline is much faster than cloning the text element */
+        text-shadow: 0 1px 0 #fff, 0 -1px 0 #fff, 1px 0 0 #fff, -1px 0 0 #fff;
+    }
+
+    .link {
+        fill: none;
+        stroke: #ccc;
+        stroke-opacity: 0.4;
+        stroke-width: 1.5px;
+    }
+</style>
+
+<script src="https://d3js.org/d3.v7.min.js"></script>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+
+        // --- 1. D3 Setup (FROM SCRIPT 1) ---
+        const width = 1200;
+        const margin = {top: 20, right: 120, bottom: 20, left: 120};
+        // --- MODIFIED --- Using dx/dy for node sizing
+        const dy = width / 6; // Horizontal spacing
+        const dx = 20;      // Vertical spacing
+
+        // --- MODIFIED --- Using nodeSize([dx, dy])
+        const treeLayout = d3.tree().nodeSize([dx, dy]);
+
+        // --- MODIFIED --- This is the correct link generator for our layout
+        const linkGenerator = d3.linkHorizontal().x(d => d.y).y(d => d.x);
+
+        // --- MODIFIED --- This is the SVG setup from SCRIPT 1
+        const svg = d3.select("#tree-container")
+            .attr("width", width)
+            .attr("height", dx) // Start small
+            .attr("viewBox", [-margin.left, -margin.top, width, dx])
+            .style("font", "10px sans-serif")
+            .style("user-select", "none");
+
+        // --- MODIFIED --- We need <g> elements for links and nodes
+        const gLink = svg.append("g")
+            .attr("fill", "none")
+            .attr("stroke", "#555")
+            .attr("stroke-opacity", 0.4)
+            .attr("stroke-width", 1.5);
+
+        const gNode = svg.append("g")
+            .attr("class", "node") // Add class for styling
+            .attr("cursor", "pointer")
+            .attr("pointer-events", "all");
+
+        // --- API URL (FROM SCRIPT 2) ---
+        const childrenApiUrl = "{% url 'organization:territory_children_api' %}";
+
+        // --- INITIAL DATA (FROM SCRIPT 2) ---
+        let initialData = {{ initial_data_json|safe }};
+
+        let i = 0; // Node counter for D3's internal IDs
+
+        // --- VIRTUAL ROOT (FROM SCRIPT 2, with modification) ---
+        let root = d3.hierarchy({
+            name: "{{ default_tree|title }} Root",
+            id: null, // This is d.data.id
+            has_children: true, // Use has_children to match your API
+            children: initialData
+        });
+        root.id = ++i; // This is d.id (D3's internal tracking ID)
+
+
+        // --- 2. Render Function (HYBRID) ---
+        // --- MODIFIED --- Added 'event' parameter
+        function update(source, event) {
+            // --- MODIFIED --- Duration from SCRIPT 1
+            const duration = event && event.altKey ? 2500 : 250;
+
+            const nodes = root.descendants().reverse();
+            const links = root.links();
+
+            // Compute the new tree layout.
+            treeLayout(root);
+
+            // --- MODIFIED --- This is the DYNAMIC LAYOUT block from SCRIPT 1
+            let left = root;
+            let right = root;
+            root.eachBefore(node => {
+                if (node.x < left.x) left = node;
+                if (node.x > right.x) right = node;
+            });
+
+            const height = right.x - left.x + margin.top + margin.bottom;
+
+            const transition = svg.transition()
+                .duration(duration)
+                .attr("height", height)
+                .attr("viewBox", [-margin.left, left.x - margin.top, width, height])
+                .tween("resize", window.ResizeObserver ? null : () => () => svg.dispatch("toggle"));
+
+            // --- Nodes ---
+            // --- MODIFIED --- Select from gNode, and bind by d.id
+            const node = gNode.selectAll("g")
+                .data(nodes, d => d.id);
+
+            // Enter new nodes at the parent's previous position.
+            const nodeEnter = node.enter().append("g")
+                // --- MODIFIED --- Using source.x0/y0 from SCRIPT 1
+                .attr("transform", d => `translate(${source.y0},${source.x0})`)
+                .attr("fill-opacity", 0)
+                .attr("stroke-opacity", 0)
+                .on("click", (event, d) => {
+                    toggleNode(d, event); // --- MODIFIED --- Pass event
+                });
+
+            // --- MODIFIED --- Using styling from SCRIPT 1
+            nodeEnter.append("circle")
+                .attr("r", 2.5)
+                .attr("fill", d => {
+                    if (d.children) return "#fff"; // Expanded: white fill
+                    if (d._children) return "#555"; // Collapsed with loaded data: dark fill
+                    if (d.data.has_children) return "steelblue"; // Collapsed with unloaded data: blue fill
+                    return "#fff"; // True leaf: white fill
+                })
+                .attr("stroke", "steelblue")
+                .attr("stroke-width", 2);
+
+            // --- MODIFIED --- Using text styling from SCRIPT 1
+            nodeEnter.append("text")
+                .attr("dy", "0.31em")
+                // Position text left or right based on children
+                .attr("x", d => d.children || d._children || d.data.has_children ? -10 : 10)
+                .attr("text-anchor", d => d.children || d._children || d.data.has_children ? "end" : "start")
+                .text(d => d.data.name);
+
+            // Transition nodes to their new position.
+            // --- MODIFIED --- Use the 'transition' variable
+            node.merge(nodeEnter).transition(transition)
+                .attr("transform", d => `translate(${d.y},${d.x})`)
+                .attr("fill-opacity", 1)
+                .attr("stroke-opacity", 1);
+
+            // Transition exiting nodes to the parent's new position.
+            // --- MODIFIED --- Use the 'transition' variable
+            node.exit().transition(transition).remove()
+                .attr("transform", d => `translate(${source.y},${source.x})`)
+                .attr("fill-opacity", 0)
+                .attr("stroke-opacity", 0);
+
+            // --- Links ---
+            // --- MODIFIED --- Select from gLink, bind by target.id
+            const link = gLink.selectAll("path")
+                .data(links, d => d.target.id);
+
+            // Enter any new links at the parent's previous position.
+            const linkEnter = link.enter().append("path")
+                .attr("class", "link") // Add class for styling
+                .attr("d", d => {
+                    const o = {x: source.x0, y: source.y0};
+                    return linkGenerator({source: o, target: o});
+                });
+
+            // Transition links to their new position.
+            // --- MODIFIED --- Use the 'transition' variable and correct generator
+            link.merge(linkEnter).transition(transition)
+                .attr("d", linkGenerator);
+
+            // Transition exiting nodes to the parent's new position.
+            // --- MODIFIED --- Use the 'transition' variable
+            link.exit().transition(transition).remove()
+                .attr("d", d => {
+                    const o = {x: source.x, y: source.y};
+                    return linkGenerator({source: o, target: o});
+                });
+
+            // Stash the old positions for transition.
+            root.eachBefore(d => {
+                d.x0 = d.x;
+                d.y0 = d.y;
+            });
+        }
+
+        // --- 3. Interaction Functions (FROM SCRIPT 2) ---
+
+        // Toggle children on click
+        // --- MODIFIED --- Added 'event' parameter
+        async function toggleNode(d, event) {
+            // Only toggle nodes
+            if (d.children) {
+                // Node is expanded, collapse it
+                d._children = d.children;
+                d.children = null;
+            } else if (d._children) {
+                // Node is collapsed, re-expand it (no API call needed)
+                d.children = d._children;
+                d._children = null;
+            } else if (d.data.has_children) {
+                // Node has never been loaded, fetch data from our API
+                const childrenData = await loadChildren(d.data.id);
+                if (childrenData) {
+                    // Add new children to the hierarchy
+                    d.children = childrenData.map(child => {
+                        let node = d3.hierarchy(child);
+                        node.parent = d;
+                        node.depth = d.depth + 1;
+                        node.id = ++i; // --- MODIFIED --- Add D3's internal ID
+                        return node;
+                    });
+                }
+            }
+            // --- MODIFIED --- Pass event to update
+            update(d, event); // Re-render the tree
+        }
+
+        // Fetch children from our API
+        async function loadChildren(parentId) {
+            if (!parentId) return null; // Don't fetch for the artifical root
+            try {
+                const response = await fetch(`${childrenApiUrl}?parent_id=${parentId}`);
+                if (!response.ok) {
+                    console.error("Failed to load children");
+                    return null;
+                }
+                const data = await response.json();
+                return data;
+            } catch (error) {
+                console.error("Error fetching children:", error);
+                return null;
+            }
+        }
+
+        // --- 4. Initial Render (HYBRID) ---
+        if(root) {
+            // --- MODIFIED --- Use dx, from SCRIPT 1
+            root.x0 = dx / 2;
+            root.y0 = 0;
+
+            if (root.children) {
+                root.children.forEach(child => {
+                    child.id = ++i; // --- MODIFIED --- Add D3's internal ID
+                    // Set up for lazy loading
+                    if (child.data.has_children) {
+                        child.children = null;
+                        child._children = null;
+                    }
+                });
+            }
+            // --- MODIFIED --- Pass null event
+            update(root, null);
+        }
+
+        // --- 5. Handle <select> menu change (FROM SCRIPT 2) ---
+        // This is the correct logic for your new API
+        d3.select("#tree-select").on("change", async function() {
+            const selectedTree = this.value;
+            // Reload the page with the new tree selected.
+            // This is the simplest way to get the new 'initial_data_json'.
+            window.location.href = `{% url 'organization:territory_explorer_page' %}?tree=${selectedTree}`;
+        });
+    });
+</script>
+{% endblock %}git

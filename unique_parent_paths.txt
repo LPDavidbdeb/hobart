@@ -1,0 +1,7 @@
+boulangerie
+cuisson
+lavage-de-vaisselle
+pesage-et-emballage
+preparation-alimentaire
+refrigeration
+ventilation

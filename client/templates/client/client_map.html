@@ -6,50 +6,12 @@
 {% block content %}
 <div class="container-fluid mt-3">
     <h2 class="mb-3">Client Locations Map</h2>
-    <div id="map" style="height: 700px; width: 100%;"></div>
+    <script>
+        const mapLocations = JSON.parse('{{ client_locations_json|escapejs }}');
+    </script>
+    {% include 'map_display.html' %}
 </div>
 {% endblock %}
 
 {% block extra_js %}
-<script>
-    let map;
-    let markers = [];
-    const clientLocations = JSON.parse('{{ client_locations_json|escapejs }}');
-    const googleMapsApiKey = "{{ google_maps_api_key }}";
-
-    async function initMap() {
-        const { Map } = await google.maps.importLibrary("map");
-        const { AdvancedMarkerElement } = await google.maps.importLibrary("marker");
-
-        map = new Map(document.getElementById("map"), {
-            center: { lat: 45.5017, lng: -73.5673 }, // Default to Montreal
-            zoom: 8,
-            mapId: "CLIENT_MAP"
-        });
-
-        clientLocations.forEach(client => {
-            const marker = new AdvancedMarkerElement({
-                position: { lat: client.lat, lng: client.lng },
-                map,
-            });
-            markers.push(marker);
-
-            const infowindow = new google.maps.InfoWindow({
-                content: `<b>${client.name}</b><br>Lat: ${client.lat}<br>Lng: ${client.lng}`,
-            });
-
-            marker.addListener("click", () => {
-                infowindow.open(map, marker);
-            });
-        });
-
-        // Optionally, fit map to markers
-        if (markers.length > 0) {
-            const bounds = new google.maps.LatLngBounds();
-            clientLocations.forEach(client => bounds.extend(new google.maps.LatLng(client.lat, client.lng)));
-            map.fitBounds(bounds);
-        }
-    }
-</script>
-<script async defer src="https://maps.googleapis.com/maps/api/js?key={{ google_maps_api_key }}&callback=initMap&libraries=marker"></script>
 {% endblock %}

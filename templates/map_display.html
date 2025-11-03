@@ -1,0 +1,43 @@
+{# Expects a variable `map_locations` to be defined in the context. #}
+{# `map_locations` can be a single object or an array of objects with lat/lng properties. #}
+
+<div id="map" style="height: 60vh; width: 100%;"></div>
+
+<script>
+    function initMap() {
+        const mapDiv = document.getElementById("map");
+        if (!mapDiv || typeof mapLocations === 'undefined' || mapLocations.length === 0) {
+            if (mapDiv) mapDiv.innerHTML = '<p class="text-center text-muted">Map data is not available.</p>';
+            return;
+        }
+
+        const isMulti = Array.isArray(mapLocations);
+        const points = isMulti ? mapLocations : [mapLocations];
+
+        const map = new google.maps.Map(mapDiv, {
+            zoom: 8,
+            center: { lat: parseFloat(points[0].lat), lng: parseFloat(points[0].lng) },
+            mapId: 'HOBART_PRIMARY_MAP' // A consistent Map ID is required for Advanced Markers
+        });
+
+        const bounds = new google.maps.LatLngBounds();
+
+        points.forEach(point => {
+            const position = { lat: parseFloat(point.lat), lng: parseFloat(point.lng) };
+            const marker = new google.maps.marker.AdvancedMarkerElement({
+                position: position,
+                map: map,
+            });
+            bounds.extend(position);
+        });
+
+        if (points.length > 1) {
+            map.fitBounds(bounds);
+        } else {
+            map.setCenter(bounds.getCenter());
+            map.setZoom(15);
+        }
+    }
+</script>
+
+<script async defer src="https://maps.googleapis.com/maps/api/js?key={{ google_maps_api_key }}&callback=initMap&libraries=map,marker"></script>

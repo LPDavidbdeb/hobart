@@ -1,6 +1,9 @@
+{% load static %}
 <nav class="navbar navbar-expand-lg navbar-light bg-light">
     <div class="container-fluid">
-        <a class="navbar-brand" href="#">My App</a>
+        <a class="navbar-brand" href="#">
+            <img src="{% static 'images/logo.png' %}" alt="My App Logo" style="height: 30px;">
+        </a>
         <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
             <span class="navbar-toggler-icon"></span>
         </button>
@@ -71,7 +74,7 @@
                     </a>
                     <ul class="dropdown-menu" aria-labelledby="navbarDropdownAdmin">
                         <li><a class="dropdown-item" href="{% url 'admin:index' %}">Admin Center</a></li>
-                        <li><a class="dropdown-item" href="{% url 'organization:nested_territory_tree' %}">Territory Tree</a></li>
+                        <li><a class="dropdown-item" href="{% url 'organization:territory_explorer_page' %}">Territory Explorer</a></li>
                         <li><hr class="dropdown-divider"></li>
                         <li><h6 class="dropdown-header">Bulk Assignments</h6></li>
                         <li><a class="dropdown-item" href="{% url 'employees:territory_assignment_upload' %}">Assign Territories to Managers</a></li>

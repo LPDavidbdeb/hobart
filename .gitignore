@@ -18,6 +18,7 @@ db.sqlite3
 data_backup.json
 *.xml
 *.csv
+hobart_data.json
 
 # Local SDKs and virtual environments
 .venv/

@@ -1,48 +1,56 @@
 # In organization/tree_definitions.py
 
 from django.conf import settings
+from organization.models import NestedTerritory # Import the model to use the enum
 
-# --- 1. BASE PATH CONFIGURATION ---
-# This points to 'your_project_root/DL/geodata/'
 BASE_GEODATA_PATH = settings.BASE_DIR / 'DL' / 'geodata'
 
-
-# --- 2. LEVEL DEFINITIONS (Your "Library") ---
+# LEVEL_DEFINITIONS is UNCHANGED from your file.
 LEVEL_DEFINITIONS = {
     'province': {
-        'level_name': 'Province',
+        'log_name': 'Province',
+        'territory_type': NestedTerritory.TerritoryType.PROVINCE,
         'name_field': 'PRNOM',
         'code_field': 'PRIDU',
         'parent_code_field': None,
+        'parent_type': None,
     },
     'cd': {
-        'level_name': 'Census Division (CD)',
+        'log_name': 'Census Division (CD)',
+        'territory_type': NestedTerritory.TerritoryType.REGION,
         'name_field': 'DRNOM',
         'code_field': 'DRIDU',
         'parent_code_field': 'PRIDU',
+        'parent_type': NestedTerritory.TerritoryType.PROVINCE,
     },
     'csd': {
-        'level_name': 'Census Subdivision (CSD)',
-        'name_field': 'CSDNAME',
-        'code_field': 'CSDIDU',
-        'parent_code_field': 'DRIDU',
+        'log_name': 'Census Subdivision (CSD)',
+        'territory_type': NestedTerritory.TerritoryType.CITY,
+        'name_field': 'SDRNOM',
+        'code_field': 'SDRIDU',
+        'parent_code_field': 'PRIDU', # <-- This is loaded "wrong" (flat), which is correct for now
+        'parent_type': NestedTerritory.TerritoryType.PROVINCE,
     },
     'fed': {
-        'level_name': 'Federal Riding (FED)',
+        'log_name': 'Federal Riding (FED)',
+        'territory_type': NestedTerritory.TerritoryType.REGION,
         'name_field': 'CÉFNOM',
         'code_field': 'CÉFIDU',
         'parent_code_field': 'PRIDU',
+        'parent_type': NestedTerritory.TerritoryType.PROVINCE,
     },
     'fsa': {
-        'level_name': 'Forward Sortation Area (FSA)',
-        'name_field': 'CFSAUID', # From address/management/commands/seed_fsas.py
-        'code_field': 'CFSAUID', # From address/management/commands/seed_fsas.py
-        'parent_code_field': 'PRIDU', # Links to province
+        'log_name': 'Forward Sortation Area (FSA)',
+        'territory_type': NestedTerritory.TerritoryType.FSA,
+        'name_field': 'RTACIDU',
+        'code_field': 'RTACIDU',
+        'parent_code_field': 'PRIDU',
+        'parent_type': NestedTerritory.TerritoryType.PROVINCE,
     },
 }
 
-
-# --- 3. TREE COMPOSITIONS ---
+# --- THIS IS THE CORRECTED SECTION ---
+# We define the three trees we want to build.
 TREE_COMPOSITIONS = {
     'statistical': [
         'province',

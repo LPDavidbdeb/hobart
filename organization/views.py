@@ -1,74 +1,63 @@
 from django.shortcuts import render
 from django.http import JsonResponse
 from .models import NestedTerritory
+import json
 
 
-def nested_territory_tree_view(request):
-    # --- CHANGED ---
-    # Get all distinct tree names to pass to the template for the dropdown
-    tree_names = list(
-        NestedTerritory.objects.values_list('tree_name', flat=True).distinct().order_by('tree_name')
-    )
-    context = {
-        'tree_names': tree_names
-    }
-    return render(request, 'organization/nested_territory_tree.html', context)
-    # --- END CHANGED ---
+# --- DELETE your old nested_territory_tree_view ---
+
+# --- ADD THIS NEW VIEW ---
+def territory_explorer_page(request):
+    """
+    Renders the main page with the D3 visualization.
+    """
+    tree_names = list(NestedTerritory.objects
+                      .values_list('tree_name', flat=True)
+                      .distinct()
+                      .order_by('tree_name'))
+
+    default_tree = tree_names[0] if tree_names else 'Default'
+
+    # --- THIS IS THE CHANGE ---
+    # Check if a tree is specified in the URL, otherwise use default
+    selected_tree = request.GET.get('tree', default_tree)
+    # --- END OF CHANGE ---
+
+    initial_nodes = []
+    # Find the root node for the *selected* tree
+    root_node = NestedTerritory.objects.filter(tree_name=selected_tree, level=0).first()
+
+    if root_node:
+        initial_nodes = [node.to_json() for node in root_node.get_children()]
+
+    return render(request, 'organization/territory_explorer.html', {
+        'tree_names': tree_names,
+        'default_tree': selected_tree,  # Pass the selected tree as the default
+        'initial_data_json': json.dumps(initial_nodes),
+    })
 
 
-def nested_territory_json_api(request):
-    node_id = request.GET.get('node_id')
-    tree_name = request.GET.get('tree_name')  # Get the selected tree name
+# --- ADD THIS NEW API VIEW ---
+def territory_children_api(request):
+    """
+    API endpoint to fetch child nodes for lazy-loading.
+    """
+    try:
+        # Get the ID of the node the user clicked on
+        parent_id = request.GET.get('parent_id')
 
-    if node_id:
-        # This logic is for lazy-loading children and remains the same
-        try:
-            parent = NestedTerritory.objects.get(pk=node_id)
-            nodes = parent.get_children()
-        except NestedTerritory.DoesNotExist:
-            return JsonResponse([], safe=False)
+        # This is the core of the efficient query
+        parent_node = NestedTerritory.objects.get(id=parent_id)
 
-        data = []
-        for node in nodes:
-            data.append({
-                'id': node.pk,
-                'name': node.name,
-                'hasChildren': not node.is_leaf_node(),
-            })
+        # get_children() is a highly efficient MPTT method.
+        # It only fetches the *immediate* children (a simple, indexed query).
+        nodes = parent_node.get_children()
+
+        # Serialize only those children to JSON
+        data = [node.to_json() for node in nodes]
         return JsonResponse(data, safe=False)
 
-    # --- CHANGED ---
-    # This is the initial load for a *specific tree*
-    elif tree_name:
-        try:
-            # Find the root node (level 0) for the selected tree
-            tree_root = NestedTerritory.objects.get(tree_name=tree_name, level=0)
-
-            # Get its immediate children (e.g., "Canada")
-            children_nodes = tree_root.get_children()
-            children_data = []
-            for node in children_nodes:
-                children_data.append({
-                    'id': node.pk,
-                    'name': node.name,
-                    'hasChildren': not node.is_leaf_node(),
-                })
-
-            # Return the tree's root node (e.g., "Administrative") as the *new*
-            # root for the D3.js hierarchy.
-            root_data = {
-                "name": tree_root.name,  # e.g., "Administrative"
-                "id": tree_root.pk,
-                "children": children_data
-            }
-            return JsonResponse(root_data)
-
-        except NestedTerritory.DoesNotExist:
-            return JsonResponse({"error": f"No root node found for tree: {tree_name}"}, status=404)
-        except NestedTerritory.MultipleObjectsReturned:
-            return JsonResponse({"error": f"Multiple root nodes found for tree: {tree_name}"}, status=500)
-    # --- END CHANGED ---
-
-    else:
-        # Fallback if no tree_name is provided
-        return JsonResponse({"error": "No tree_name specified"}, status=400)
+    except NestedTerritory.DoesNotExist:
+        return JsonResponse({'error': 'Node not found'}, status=404)
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
