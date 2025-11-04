@@ -13,7 +13,7 @@ from django.db.models import Q
 from django.template.loader import render_to_string
 from .models import EmployeeProfile
 from organization.models import Territory
-from .forms import TerritoryAssignmentForm
+from .forms import TerritoryAssignmentForm, DirectorCreationForm, ManagerCreationForm, TechnicianCreationForm
 from client.forms import CsvUploadForm # Corrected import
 from .utils import create_employee
 from address.forms import AddressSearchForm
@@ -42,12 +42,31 @@ class BaseEmployeeListView(LoginRequiredMixin, UserPassesTestMixin, ListView):
         context = super().get_context_data(**kwargs)
         context['page_title'] = self.page_title
         context['role_name'] = self.role.label
-        if 'form' not in kwargs and self.form_class: # Added check for self.form_class
-            context['form'] = self.form_class()
+        
+        if 'form' not in kwargs and self.form_class:
+            # --- THIS IS THE FIX ---
+            # Determine the correct queryset for the 'reports_to' field
+            superiors_queryset = EmployeeProfile.objects.none()
+            if self.role == EmployeeProfile.Role.MANAGER:
+                superiors_queryset = EmployeeProfile.objects.filter(role=EmployeeProfile.Role.DIRECTOR)
+            elif self.role == EmployeeProfile.Role.TECHNICIAN:
+                superiors_queryset = EmployeeProfile.objects.filter(role=EmployeeProfile.Role.MANAGER)
+            
+            # Pass the filtered queryset to the form
+            context['form'] = self.form_class(superiors_queryset=superiors_queryset)
+            
         return context
 
     def post(self, request, *args, **kwargs):
-        form = self.form_class(request.POST)
+        # We need to pass the queryset to the form on POST as well
+        superiors_queryset = EmployeeProfile.objects.none()
+        if self.role == EmployeeProfile.Role.MANAGER:
+            superiors_queryset = EmployeeProfile.objects.filter(role=EmployeeProfile.Role.DIRECTOR)
+        elif self.role == EmployeeProfile.Role.TECHNICIAN:
+            superiors_queryset = EmployeeProfile.objects.filter(role=EmployeeProfile.Role.MANAGER)
+
+        form = self.form_class(request.POST, superiors_queryset=superiors_queryset)
+
         if form.is_valid():
             form.save()
             messages.success(request, f'{self.role.label} created successfully!')
@@ -60,17 +79,17 @@ class BaseEmployeeListView(LoginRequiredMixin, UserPassesTestMixin, ListView):
 # --- Role-Specific List Views --- #
 class DirectorListView(BaseEmployeeListView):
     role = EmployeeProfile.Role.DIRECTOR
-    # form_class = DirectorCreationForm # This form doesn't exist yet
+    form_class = DirectorCreationForm
     page_title = "Director List"
 
 class ManagerListView(BaseEmployeeListView):
     role = EmployeeProfile.Role.MANAGER
-    # form_class = ManagerCreationForm # This form doesn't exist yet
+    form_class = ManagerCreationForm
     page_title = "Manager List"
 
 class TechnicianListView(BaseEmployeeListView):
     role = EmployeeProfile.Role.TECHNICIAN
-    # form_class = TechnicianCreationForm # This form doesn't exist yet
+    form_class = TechnicianCreationForm
     page_title = "Technician List"
 
 # --- Employee List View (All Employees) ---
