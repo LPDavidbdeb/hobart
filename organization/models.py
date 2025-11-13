@@ -41,6 +41,9 @@ class NestedTerritory(MPTTModel):
     level = gis_models.PositiveIntegerField(editable=False, null=True)
     tree_id = gis_models.PositiveIntegerField(editable=False, null=True)
 
+    simplified_boundary = gis_models.MultiPolygonField(srid=4326, null=True, blank=True,
+                                                       help_text="Pre-calculated simplified boundary for quick rendering at low zoom levels.")
+
     class MPTTMeta:
         order_insertion_by = ['name']
 

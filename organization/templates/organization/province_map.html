@@ -1,0 +1,56 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <h2>Canadian Provinces (Extreme Simplification Test)</h2>
+
+    <div id="map" style="height: 700px; width: 100%; border: 1px solid #ccc;"></div>
+</div>
+
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+{{ province_geojson|json_script:"province-data" }}
+
+<script>
+    document.addEventListener("DOMContentLoaded", function() {
+        // 1. Initialize Map
+        var map = L.map('map').setView([{{ centroid.0 }}, {{ centroid.1 }}], {{ zoom }});
+
+        // 2. Add standard OSM tiles
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 18,
+            attribution: '© OpenStreetMap'
+        }).addTo(map);
+
+        // 3. Retrieve and Render GeoJSON
+        const dataElement = document.getElementById('province-data');
+        if (dataElement) {
+            try {
+                const geojsonData = JSON.parse(dataElement.textContent);
+
+                L.geoJSON(geojsonData, {
+                    style: {
+                        color: '#ff7800',      // Orange outline for high visibility
+                        weight: 3,             // Thick lines
+                        opacity: 1,
+                        fillColor: '#ff7800',
+                        fillOpacity: 0.2
+                    },
+                    onEachFeature: function(feature, layer) {
+                        if (feature.properties && feature.properties.name) {
+                            layer.bindTooltip(
+                                `<strong>${feature.properties.name}</strong>`,
+                                { direction: 'center', className: 'fsa-tooltip' }
+                            );
+                        }
+                    }
+                }).addTo(map);
+
+            } catch (e) {
+                console.error("Error parsing province GeoJSON:", e);
+            }
+        }
+    });
+</script>
+{% endblock %}

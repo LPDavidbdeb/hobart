@@ -18,7 +18,7 @@ db.sqlite3
 data_backup.json
 *.xml
 *.csv
-hobart_data.json
+*.json
 
 # Local SDKs and virtual environments
 .venv/
@@ -27,6 +27,10 @@ google-cloud-sdk/
 # IDE settings
 .idea/
 .vscode/
+
+# OS and IDE specific
+.DS_Store
+*.ipynb
 
 # Downloaded data
 DL/
