@@ -9,7 +9,7 @@
         {% endif %}
     </td>
     <td>
-        <a href="{% url 'employees:employee_detail' employee.pk %}" class="btn btn-sm btn-info">View Details</a>
+        <a href="{% url 'employees:employee_detail' pk=employee.pk %}" class="btn btn-sm btn-info">View Details</a>
     </td>
 </tr>
 {% empty %}

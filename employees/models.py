@@ -2,7 +2,8 @@
 
 from django.db import models
 from django.conf import settings
-from address.models import Address, AddressStatus # Import AddressStatus
+from django.urls import reverse
+from address.models import Address, AddressStatus, FSA
 from organization.models import Territory
 
 
@@ -35,8 +36,25 @@ class EmployeeProfile(models.Model):
         related_name='subordinates'
     )
 
-    # --- Matrix Relationship (Territories) ---
-    territories = models.ManyToManyField(Territory, blank=True, related_name='employees')
+    # --- Geographic Responsibilities & Location ---
+    territories = models.ManyToManyField(
+        Territory,
+        blank=True,
+        related_name='employees',
+        help_text="Legacy field for manager-level territory assignments."
+    )
+    responsible_fsas = models.ManyToManyField(
+        FSA,
+        blank=True,
+        related_name='technicians',
+        help_text="FSAs a Technician is directly responsible for."
+    )
+    postal_code = models.CharField(
+        max_length=7,
+        blank=True,
+        null=True,
+        help_text="The employee's home postal code. Used as a starting point for location and distance calculations."
+    )
 
     # --- Address ---
     address = models.ForeignKey(Address, on_delete=models.SET_NULL, null=True, blank=True, related_name='employee_profiles')
@@ -51,3 +69,6 @@ class EmployeeProfile(models.Model):
     def __str__(self):
         full_name = self.user.get_full_name()
         return f"{full_name or self.user.username} ({self.get_role_display()})"
+
+    def get_absolute_url(self):
+        return reverse('employees:employee_detail', kwargs={'pk': self.pk})

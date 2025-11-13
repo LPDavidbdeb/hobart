@@ -94,7 +94,7 @@ class Client(models.Model):
     territory = models.ForeignKey(Territory, on_delete=models.SET_NULL, null=True, blank=True, related_name='clients')
     industry_code = models.ForeignKey(IndustryCode, on_delete=models.SET_NULL, null=True, blank=True, related_name='clients')
     customer_type_code = models.ForeignKey(CustomerTypeCode, on_delete=models.SET_NULL, null=True, blank=True, related_name='clients')
-    industry_sub_code = models.ForeignKey(IndustrySubCode, on_delete=models.SET_NULL, null=True, blank=True, related_in_class_name='clients')
+    industry_sub_code = models.ForeignKey(IndustrySubCode, on_delete=models.SET_NULL, null=True, blank=True, related_name='clients')
 
     # --- Managers ---
     objects = ClientManager() # Use the custom manager

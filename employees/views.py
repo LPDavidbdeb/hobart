@@ -9,7 +9,7 @@ from django.contrib.auth.models import User, Group
 from django.views.generic import ListView, DetailView
 from django.http import JsonResponse
 from django.db import transaction, IntegrityError
-from django.db.models import Q
+from django.db.models import Q, Prefetch
 from django.template.loader import render_to_string
 from .models import EmployeeProfile
 from organization.models import Territory
@@ -126,14 +126,37 @@ class EmployeeDetailView(DetailView):
     context_object_name = 'employee'
 
     def get_queryset(self):
-        return super().get_queryset().select_related('user', 'reports_to__user', 'address')
+        # Prefetch related data to optimize queries
+        return super().get_queryset().select_related(
+            'user', 'reports_to__user', 'address'
+        ).prefetch_related(
+            'responsible_fsas',
+            Prefetch(
+                'subordinates',
+                queryset=EmployeeProfile.objects.select_related('user').prefetch_related(
+                    'responsible_fsas',
+                    Prefetch(
+                        'subordinates',
+                        queryset=EmployeeProfile.objects.select_related('user').prefetch_related('responsible_fsas')
+                    )
+                )
+            )
+        )
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context['address_search_form'] = AddressSearchForm()
-        # Logic for showing possible supervisors in edit mode
+        employee = self.object
+
+        # --- Breadcrumb Trail ---
+        breadcrumbs = []
+        current = employee.reports_to
+        while current:
+            breadcrumbs.append(current)
+            current = current.reports_to
+        context['breadcrumbs'] = reversed(breadcrumbs)
+
+        # --- Supervisor Edit Logic ---
         if self.request.user.is_superuser:
-            employee = self.object
             possible_supervisors = EmployeeProfile.objects.exclude(pk=employee.pk)
             if employee.role == EmployeeProfile.Role.TECHNICIAN:
                 possible_supervisors = possible_supervisors.filter(role=EmployeeProfile.Role.MANAGER)
@@ -142,6 +165,8 @@ class EmployeeDetailView(DetailView):
             else:
                 possible_supervisors = possible_supervisors.none()
             context['supervisors'] = possible_supervisors.select_related('user').order_by('user__first_name')
+
+        context['address_search_form'] = AddressSearchForm()
         return context
 
 # --- CSV Upload Views ---
