@@ -1,0 +1,79 @@
+{% extends 'base.html' %}
+{% load django_bootstrap5 %}
+
+
+{% block title %}FSA Region Map{% endblock %}
+{% block extra_css %}
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css"
+    />
+    <style>
+        #map {
+            width: 100%;
+            height: 700px;
+        }
+        /* Optional: Style for the tooltip */
+        .fsa-tooltip {
+            font-weight: bold;
+            color: #333;
+        }
+    </style>
+{% endblock %}
+
+<body>
+{% block content %}
+    <h1>FSA Region Map</h1>
+    <div id="map"></div>
+{% endblock %}
+ {% block scripts %}
+     <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            // 1. Initialize map with your calculated centroid and zoom
+            const map = L.map('map').setView([{{ centroid.0 }}, {{ centroid.1 }}], {{ zoom }});
+
+            // 2. Add base tile layer
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '&copy; OpenStreetMap contributors',
+                maxZoom: 19
+            }).addTo(map);
+
+            // 3. Get and parse the GeoJSON data from the Django view
+            // 'escapejs' is crucial here to prevent syntax errors if the JSON has special characters.
+            const fsaDataRaw = '{{ fsa_geojson|escapejs }}';
+
+            if (fsaDataRaw) {
+                const fsaData = JSON.parse(fsaDataRaw);
+
+                // 4. Add all shapes to the map at once
+                L.geoJSON(fsaData, {
+                    // Style for all polygons
+                    style: function (feature) {
+                        return {
+                            color: '#3388ff',      // Blue outline
+                            weight: 2,             // Outline thickness
+                            opacity: 1,            // Outline opacity
+                            fillColor: '#3388ff',  // Blue fill
+                            fillOpacity: 0.2       // Semi-transparent fill
+                        };
+                    },
+                    // Behavior for each polygon (e.g., tooltips on hover)
+                    onEachFeature: function (feature, layer) {
+                        if (feature.properties && feature.properties.code) {
+                            layer.bindTooltip(feature.properties.code, {
+                                permanent: false,  // Only show on hover
+                                direction: 'center',
+                                className: 'fsa-tooltip'
+                            });
+                        }
+                    }
+                }).addTo(map);
+            }
+        });
+    </script>
+
+ {% endblock %}
+
+
+</body>

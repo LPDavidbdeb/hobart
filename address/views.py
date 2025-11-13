@@ -7,6 +7,8 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.views.generic import ListView, View
 from django.contrib import messages
 from django.db.models import Q
+from shapely.constructive import centroid
+
 from .models import Address, AddressValidationLog, AddressStatus, FSA
 from organization.models import NestedTerritory # Import NestedTerritory
 from .utils import run_address_validation_batch
@@ -281,3 +283,125 @@ def set_client_address_api(request):
 
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=500)
+
+
+from django.shortcuts import render
+import json
+
+# views.py
+from django.shortcuts import render
+from django.db.models import Q, Sum
+from decimal import Decimal
+from math import log2
+from address.models import Address, FSA
+from client.models import Client
+
+
+import json
+from django.shortcuts import render
+from django.db.models import Sum, Value
+from django.contrib.gis.db.models.functions import GeoFunc
+from math import log2
+from client.models import Client
+from address.models import FSA
+from django.contrib.gis.db import models as gis_models
+
+# --- Define Custom PostGIS Function ---
+class SimplifyPreserveTopology(GeoFunc):
+    function = 'ST_SimplifyPreserveTopology'
+    # This line tells Django the function returns a MultiPolygonField
+    output_field = gis_models.MultiPolygonField()
+
+def fsa_region_map(request, region_prefix):
+    prefix = region_prefix.upper()
+
+    # FIX 1: Use the legacy 'postal_code' field on the Client model.
+    # The ORM can filter on this because it's a real database column.
+    clients = Client.objects.filter(
+        postal_code__istartswith=prefix,
+        address__latitude__isnull=False,
+        address__longitude__isnull=False
+    ).select_related('address')
+
+    if not clients.exists():
+        # Fallback centroid and zoom (Roughly Canada)
+        centroid = [56, -96]
+        zoom = 4
+    else:
+        # Compute spherical centroid (mean of lat/lng)
+        count = clients.count()
+        total_lat = sum([float(c.address.latitude) for c in clients])
+        total_lng = sum([float(c.address.longitude) for c in clients])
+        centroid = [total_lat / count, total_lng / count]
+
+        # Compute zoom based on total land_area of FSAs starting with prefix
+        total_land_area = FSA.objects.filter(
+            code__istartswith=prefix
+        ).aggregate(total=Sum('land_area'))['total'] or 1000
+
+        # Approximate zoom heuristic
+        zoom = max(2, min(12, int(8 - log2(total_land_area / 100))))
+
+        # 2. OPTIMIZED GEOJSON GENERATION (Database-Side)
+        # 0.005 tolerance is roughly ~500m.
+        TOLERANCE = 0.005
+
+        # Fetch only what we need. The DB does the heavy lifting.
+        fsa_data = FSA.objects.filter(
+            code__istartswith=prefix,
+            boundary__isnull=False
+        ).annotate(
+            simple_geom=SimplifyPreserveTopology('boundary', Value(TOLERANCE))
+        ).values('code', 'client_count', 'simple_geom')
+
+        fsa_features = []
+        for entry in fsa_data:
+            if entry['simple_geom']:
+                # PostGIS usually returns the geometry as a GEOSGeometry object here.
+                # We use .json to get its GeoJSON string representation, then parse it.
+                geom = entry['simple_geom']
+                geom_dict = json.loads(geom.json) if hasattr(geom, 'json') else json.loads(geom)
+
+                fsa_features.append({
+                    "type": "Feature",
+                    "properties": {
+                        "code": entry['code'],
+                        "client_count": entry['client_count']
+                    },
+                    "geometry": geom_dict
+                })
+        fsa_geojson = json.dumps({
+            "type": "FeatureCollection",
+            "features": fsa_features
+        })
+
+
+    zoom = 11
+    # fsa_geojson = """
+    # {
+    #   "type": "FeatureCollection",
+    #   "features": [
+    #     {
+    #       "type": "Feature",
+    #       "properties": {"code": "H2X"},
+    #       "geometry": {
+    #         "type": "Polygon",
+    #         "coordinates": [[
+    #           [-73.58, 45.50],
+    #           [-73.55, 45.50],
+    #           [-73.55, 45.52],
+    #           [-73.58, 45.52],
+    #           [-73.58, 45.50]
+    #         ]]
+    #       }
+    #     }
+    #   ]
+    # }
+    # """
+    context = {
+        "centroid": centroid,  # [lat, lng]
+        "zoom": zoom,
+        "fsa_geojson": fsa_geojson,  # Add to context
+    }
+
+    return render(request, "address/fsa_region_map.html", context)

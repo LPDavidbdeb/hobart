@@ -6,6 +6,8 @@ app_name = 'address'
 urlpatterns = [
     # FSA Search
     path('fsa-search/', views.FSASearchView.as_view(), name='fsa_search'),
+    path('fsa-map/<str:region_prefix>/', views.fsa_region_map, name='fsa_map'),
+    # path('fsa-map/', views.fsa_region_map, name='fsa_region_map'),
 
     # Dashboard
     path('health-dashboard/', views.AddressHealthDashboardView.as_view(), name='health_dashboard'),

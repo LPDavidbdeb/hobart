@@ -69,3 +69,49 @@ def territory_children_api(request):
         return JsonResponse({'error': 'Node not found'}, status=404)
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=500)
+
+
+import json
+import time
+from django.shortcuts import render
+from .models import NestedTerritory
+
+
+import json
+import time
+from django.shortcuts import render
+from .models import NestedTerritory
+
+def province_map_view(request):
+    # 1. Fast Fetch
+    # We ONLY fetch the small 'simplified_boundary' field.
+    # We DEFER the huge 'boundary' field so it never touches standard memory.
+    provinces = NestedTerritory.objects.filter(
+        type=NestedTerritory.TerritoryType.PROVINCE,
+        simplified_boundary__isnull=False
+    ).defer('boundary')
+
+    # 2. Zero-Processing Serialization
+    features = []
+    for province in provinces:
+        features.append({
+            "type": "Feature",
+            "properties": {
+                "id": province.id,
+                "name": province.name,
+                "client_count": province.client_count
+            },
+            # Just load the pre-calculated JSON string. No math required.
+            "geometry": json.loads(province.simplified_boundary.json)
+        })
+
+    # province_geojson = json.dumps({"type": "FeatureCollection", "features": features})
+    province_geojson = {"type": "FeatureCollection", "features": features}
+
+    context = {
+        "centroid": [56.13, -106.35], # Center of Canada
+        "zoom": 3,
+        "province_geojson": province_geojson
+    }
+
+    return render(request, "organization/province_map.html", context)

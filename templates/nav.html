@@ -54,6 +54,9 @@
                     <ul class="dropdown-menu" aria-labelledby="navbarDropdownAddresses">
                         <li><a class="dropdown-item" href="{% url 'client:address_validation_list' %}">Address Validation Queue</a></li>
                         <li><a class="dropdown-item" href="{% url 'address:health_dashboard' %}">Address Health Dashboard</a></li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li><a class="dropdown-item" href="{% url 'address:fsa_search' %}">FSA Search</a></li>
+                        <li><a class="dropdown-item" href="{% url 'address:fsa_map' region_prefix='h' %}">FSA Map (QC)</a></li>
                     </ul>
                 </li>
 

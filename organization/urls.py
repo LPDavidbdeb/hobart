@@ -16,4 +16,8 @@ urlpatterns = [
     path('api/territory-children/',
          views.territory_children_api,
          name='territory_children_api'),
+
+    path('map/provinces/', views.province_map_view, name='province_map'),
+    path('map/provinces-test/', views.province_map_view, name='province_map_test'),
+
 ]
