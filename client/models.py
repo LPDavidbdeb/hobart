@@ -39,17 +39,48 @@ class ClientManager(models.Manager):
         )
 
 class Client(models.Model):
-    """Represents an individual client site or store."""
+    """
+    Represents an individual client site or store.
+
+    Architectural Note:
+    A client's location is officially determined by the `address` field, which links
+    to a validated `address.Address` object.
+
+    The `address1`, `address2`, and `postal_code` fields on this model are considered
+    LEGACY. They hold the original, unvalidated data and are used by a periodic
+    batch process (e.g., `run_address_validation_batch`) to find and link the
+    official address. New code should always rely on `client.address` for
+    location data.
+    """
     account_number = models.CharField(max_length=50, unique=True, db_index=True, help_text="The unique account number for the client site.")
     name = models.CharField(max_length=255, help_text="The specific name of the client site.")
 
-    # --- Legacy Address Fields (for temporary import) ---
-    address1 = models.CharField(max_length=255, blank=True)
-    address2 = models.CharField(max_length=255, blank=True)
-    postal_code = models.CharField(max_length=20, blank=True)
+    # --- Legacy Address Fields (for temporary import and validation) ---
+    address1 = models.CharField(
+        max_length=255,
+        blank=True,
+        help_text="LEGACY FIELD: Used for initial address validation. The source of truth is the 'address' field."
+    )
+    address2 = models.CharField(
+        max_length=255,
+        blank=True,
+        help_text="LEGACY FIELD: Used for initial address validation. The source of truth is the 'address' field."
+    )
+    postal_code = models.CharField(
+        max_length=20,
+        blank=True,
+        help_text="LEGACY FIELD: Used for initial address validation. The source of truth is the 'address' field."
+    )
     
-    # --- Standardized Address (the goal) ---
-    address = models.ForeignKey(Address, on_delete=models.SET_NULL, null=True, blank=True, related_name='clients')
+    # --- Standardized Address (The Single Source of Truth) ---
+    address = models.ForeignKey(
+        Address,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='clients',
+        help_text="The official, validated address for this client. This is the single source of truth for location."
+    )
     address_status = models.ForeignKey(
         AddressStatus,
         on_delete=models.SET_NULL,
@@ -63,7 +94,7 @@ class Client(models.Model):
     territory = models.ForeignKey(Territory, on_delete=models.SET_NULL, null=True, blank=True, related_name='clients')
     industry_code = models.ForeignKey(IndustryCode, on_delete=models.SET_NULL, null=True, blank=True, related_name='clients')
     customer_type_code = models.ForeignKey(CustomerTypeCode, on_delete=models.SET_NULL, null=True, blank=True, related_name='clients')
-    industry_sub_code = models.ForeignKey(IndustrySubCode, on_delete=models.SET_NULL, null=True, blank=True, related_name='clients')
+    industry_sub_code = models.ForeignKey(IndustrySubCode, on_delete=models.SET_NULL, null=True, blank=True, related_in_class_name='clients')
 
     # --- Managers ---
     objects = ClientManager() # Use the custom manager
