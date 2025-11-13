@@ -7,9 +7,10 @@ from django.contrib.auth.decorators import login_required, user_passes_test
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
 from django.contrib.auth.models import User, Group
 from django.views.generic import ListView, DetailView
-from django.http import JsonResponse
+from django.http import JsonResponse, HttpResponseBadRequest
 from django.db import transaction, IntegrityError
-from django.db.models import Q, Prefetch
+from django.db.models import Q, Prefetch, Sum
+from django.contrib.gis.db.models.functions import AsGeoJSON # Removed Union
 from django.template.loader import render_to_string
 from .models import EmployeeProfile
 from organization.models import Territory
@@ -142,6 +143,32 @@ class EmployeeDetailView(DetailView):
                 )
             )
         )
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        employee = self.object
+
+        # --- Breadcrumb Trail ---
+        breadcrumbs = []
+        current = employee.reports_to
+        while current:
+            breadcrumbs.append(current)
+            current = current.reports_to
+        context['breadcrumbs'] = reversed(breadcrumbs)
+
+        # --- Supervisor Edit Logic ---
+        if self.request.user.is_superuser:
+            possible_supervisors = EmployeeProfile.objects.exclude(pk=employee.pk)
+            if employee.role == EmployeeProfile.Role.TECHNICIAN:
+                possible_supervisors = possible_supervisors.filter(role=EmployeeProfile.Role.MANAGER)
+            elif employee.role == EmployeeProfile.Role.MANAGER:
+                possible_supervisors = possible_supervisors.filter(role=EmployeeProfile.Role.DIRECTOR)
+            else:
+                possible_supervisors = possible_supervisors.none()
+            context['supervisors'] = possible_supervisors.select_related('user').order_by('user__first_name')
+
+        context['address_search_form'] = AddressSearchForm()
+        return context
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -333,3 +360,88 @@ def update_employee_field_api(request):
         except Exception as e:
             return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
     return JsonResponse({'status': 'error', 'message': 'Invalid request method.'}, status=405)
+
+@login_required
+def client_counts_api(request):
+    employee_id = request.GET.get('employee_id')
+    if not employee_id:
+        return HttpResponseBadRequest("Missing 'employee_id' parameter.")
+
+    try:
+        employee = EmployeeProfile.objects.get(pk=employee_id)
+    except (EmployeeProfile.DoesNotExist, ValueError):
+        return HttpResponseBadRequest(f"Invalid employee_id: {employee_id}")
+
+    data = {"total_clients": 0, "breakdown": []}
+
+    if employee.role == EmployeeProfile.Role.TECHNICIAN:
+        fsas = employee.responsible_fsas.all()
+        for fsa in fsas:
+            data['breakdown'].append({"label": fsa.code, "value": fsa.client_count, "id": fsa.pk})
+        data['total_clients'] = sum(item['value'] for item in data['breakdown'])
+
+    elif employee.role == EmployeeProfile.Role.MANAGER:
+        subordinates = employee.subordinates.filter(role=EmployeeProfile.Role.TECHNICIAN).annotate(
+            total_clients_for_tech=Sum('responsible_fsas__client_count')
+        ).select_related('user')
+        for sub in subordinates:
+            data['breakdown'].append({
+                "label": sub.user.get_full_name(),
+                "value": sub.total_clients_for_tech or 0,
+                "id": sub.pk
+            })
+        data['total_clients'] = sum(item['value'] for item in data['breakdown'])
+
+    elif employee.role == EmployeeProfile.Role.DIRECTOR:
+        subordinates = employee.subordinates.filter(role=EmployeeProfile.Role.MANAGER).annotate(
+            total_clients_for_manager=Sum('subordinates__responsible_fsas__client_count')
+        ).select_related('user')
+        for sub in subordinates:
+            data['breakdown'].append({
+                "label": sub.user.get_full_name(),
+                "value": sub.total_clients_for_manager or 0,
+                "id": sub.pk
+            })
+        data['total_clients'] = sum(item['value'] for item in data['breakdown'])
+
+    return JsonResponse(data)
+
+@login_required
+def employee_fsa_geometry_api(request, pk):
+    try:
+        employee = get_object_or_404(EmployeeProfile, pk=pk)
+
+        if employee.role != EmployeeProfile.Role.TECHNICIAN:
+            return JsonResponse({'error': 'Employee is not a technician'}, status=400)
+
+        # Fetch all valid simplified FSA boundaries for this technician
+        # No Union operation here
+        valid_fsas = employee.responsible_fsas.filter(simplified_boundary__isnull=False)
+        
+        if not valid_fsas.exists():
+            return JsonResponse({'type': 'FeatureCollection', 'features': []})
+
+        features = []
+        for fsa in valid_fsas:
+            # Convert each simplified_boundary to GeoJSON
+            if fsa.simplified_boundary:
+                features.append({
+                    'type': 'Feature',
+                    'geometry': json.loads(fsa.simplified_boundary.json),
+                    'properties': {
+                        'code': fsa.code,
+                        'client_count': fsa.client_count,
+                        'employee_name': employee.user.get_full_name()
+                    }
+                })
+
+        return JsonResponse({
+            'type': 'FeatureCollection',
+            'features': features
+        })
+
+    except (EmployeeProfile.DoesNotExist, ValueError):
+        return HttpResponseBadRequest(f"Invalid employee_id: {pk}")
+    except Exception as e:
+        # Catch potential database errors and return a clean error
+        return JsonResponse({'error': f'An error occurred during geometry processing: {str(e)}'}, status=500)

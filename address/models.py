@@ -23,6 +23,7 @@ class FSA(gis_models.Model):
     pruid = gis_models.CharField(max_length=2, db_index=True, null=True, blank=True, help_text="Unique identifier for the province or territory (PRUID).")
     land_area = gis_models.FloatField(null=True, blank=True, help_text="Land area in square kilometers.")
     boundary = gis_models.MultiPolygonField(srid=4326, null=True, blank=True, help_text="The geographic boundary of the FSA.")
+    simplified_boundary = gis_models.MultiPolygonField(srid=4326, null=True, blank=True, help_text="A pre-calculated, low-resolution version of the boundary for fast map rendering.")
     census_year = gis_models.PositiveIntegerField(null=True, blank=True, db_index=True, help_text="The census year the data is from (e.g., 2021).")
     description = gis_models.CharField(max_length=255, blank=True, help_text="A description for this FSA, which may be imported from external sources.")
     client_count = gis_models.PositiveIntegerField(default=0, editable=False, help_text="Total number of active clients in this FSA.")

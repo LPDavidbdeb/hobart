@@ -15,77 +15,139 @@
         </ol>
     </nav>
 
-    <h1>{{ employee.user.get_full_name|default:employee.user.username }}</h1>
+    <div class="d-flex justify-content-between align-items-center">
+        <h1>{{ employee.user.get_full_name|default:employee.user.username }}</h1>
+        <span id="total-clients-badge" class="badge bg-primary rounded-pill fs-5" style="display: none;"></span>
+    </div>
     <p><strong>Role:</strong> {{ employee.get_role_display }}</p>
     <p><strong>Code:</strong> {{ employee.code|default:"N/A" }}</p>
     <hr>
 
     {# --- Technician-specific view --- #}
-    {% if employee.role == 'TECHNICIAN' and employee.responsible_fsas.all %}
+    {% if employee.role == 'TECHNICIAN' %}
         <h2>Responsible FSAs</h2>
-        <ul class="list-group">
+        <ul class="list-group fsa-list">
             {% for fsa in employee.responsible_fsas.all %}
-                <li class="list-group-item">{{ fsa.code }}</li>
+                <li class="list-group-item d-flex justify-content-between align-items-center" data-id="{{ fsa.pk }}">
+                    {{ fsa.code }}
+                    <span class="badge bg-secondary rounded-pill">...</span>
+                </li>
+            {% empty %}
+                <li class="list-group-item">No FSAs assigned.</li>
             {% endfor %}
         </ul>
     {% endif %}
 
-    {# --- Manager view --- #}
-    {% if employee.role == 'MANAGER' %}
-        <h2>Technicians Reporting</h2>
-        {% for subordinate in employee.subordinates.all %}
-            <div class="card mb-3">
-                <div class="card-header">
-                    <strong><a href="{{ subordinate.get_absolute_url }}">{{ subordinate.user.get_full_name }}</a></strong> ({{ subordinate.get_role_display }})
-                </div>
-                <div class="card-body">
-                    {% if subordinate.responsible_fsas.all %}
-                        <h6 class="card-title">Responsible FSAs:</h6>
-                        <ul class="list-group list-group-flush">
-                            {% for fsa in subordinate.responsible_fsas.all %}
-                                <li class="list-group-item py-1">{{ fsa.code }}</li>
-                            {% endfor %}
-                        </ul>
-                    {% else %}
-                        <p class="card-text">No FSAs assigned.</p>
-                    {% endif %}
-                </div>
-            </div>
-        {% empty %}
-            <p>This manager has no subordinates.</p>
-        {% endfor %}
-    {% endif %}
-
-    {# --- Director view --- #}
-    {% if employee.role == 'DIRECTOR' %}
-        <h2>Managers Reporting</h2>
-        {% for manager in employee.subordinates.all %}
-            <div class="card mb-4">
-                <div class="card-header bg-secondary text-white">
-                    <h4><a href="{{ manager.get_absolute_url }}" class="text-white">{{ manager.user.get_full_name }}</a></h4>
-                </div>
-                <div class="card-body">
-                    <h5 class="card-title">Technicians under this Manager:</h5>
-                    {% for technician in manager.subordinates.all %}
-                        <div class="ms-3 mb-2">
-                            <strong><a href="{{ technician.get_absolute_url }}">{{ technician.user.get_full_name }}</a></strong>
-                            {% if technician.responsible_fsas.all %}
-                                <ul class="list-inline">
-                                    {% for fsa in technician.responsible_fsas.all %}
-                                        <li class="list-inline-item"><span class="badge bg-light text-dark">{{ fsa.code }}</span></li>
-                                    {% endfor %}
-                                </ul>
+    {# --- Manager and Director view (Refactored with Accordion) --- #}
+    {% if employee.role == 'MANAGER' or employee.role == 'DIRECTOR' %}
+        <h2>Subordinates</h2>
+        <div class="accordion" id="subordinatesAccordion">
+            {% for subordinate in employee.subordinates.all %}
+                <div class="accordion-item" data-id="{{ subordinate.pk }}">
+                    <h2 class="accordion-header" id="heading-{{ subordinate.pk }}">
+                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapse-{{ subordinate.pk }}" aria-expanded="false" aria-controls="collapse-{{ subordinate.pk }}">
+                            <div class="d-flex justify-content-between w-100 me-3">
+                                <span>{{ subordinate.user.get_full_name }} ({{ subordinate.get_role_display }})</span>
+                                <span class="badge bg-secondary rounded-pill">... clients</span>
+                            </div>
+                        </button>
+                    </h2>
+                    <div id="collapse-{{ subordinate.pk }}" class="accordion-collapse collapse" aria-labelledby="heading-{{ subordinate.pk }}" data-bs-parent="#subordinatesAccordion">
+                        <div class="accordion-body">
+                            {% if subordinate.role == 'MANAGER' %}
+                                <h5>Technicians under this Manager:</h5>
+                                {% for technician in subordinate.subordinates.all %}
+                                    {% include 'employees/_subordinate_card.html' with employee=technician %}
+                                {% empty %}
+                                    <p>This manager has no technicians reporting to them.</p>
+                                {% endfor %}
+                            {% elif subordinate.role == 'TECHNICIAN' %}
+                                {% include 'employees/_subordinate_card.html' with employee=subordinate %}
                             {% endif %}
                         </div>
-                    {% empty %}
-                        <p>This manager has no technicians reporting to them.</p>
-                    {% endfor %}
+                    </div>
                 </div>
-            </div>
-        {% empty %}
-            <p>This director has no subordinates.</p>
-        {% endfor %}
+            {% empty %}
+                <p>This employee has no subordinates.</p>
+            {% endfor %}
+        </div>
     {% endif %}
 
 </div>
+{% endblock %}
+
+{% block scripts %}
+{{ block.super }}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const mainEmployeeId = {{ employee.pk }};
+    const apiBaseUrl = "{% url 'employees:client_counts_api' %}";
+
+    // --- Stage 1: Fetch totals for the main employee ---
+    fetch(`${apiBaseUrl}?employee_id=${mainEmployeeId}`)
+        .then(response => response.json())
+        .then(data => {
+            // Update total clients badge
+            const totalBadge = document.getElementById('total-clients-badge');
+            if (totalBadge) {
+                totalBadge.textContent = `${data.total_clients} Clients`;
+                totalBadge.style.display = '';
+            }
+
+            // Update totals for direct subordinates
+            data.breakdown.forEach(item => {
+                const subordinateElement = document.querySelector(`.accordion-item[data-id='${item.id}']`);
+                if (subordinateElement) {
+                    const badge = subordinateElement.querySelector('.accordion-header .badge');
+                    if (badge) badge.textContent = `${item.value} clients`;
+                }
+            });
+        })
+        .catch(error => console.error('Error fetching main client counts:', error));
+
+    // --- Stage 2: Fetch details for all visible technicians ---
+    const technicianCards = document.querySelectorAll('.card[data-role="TECHNICIAN"]');
+    technicianCards.forEach(card => {
+        const techId = card.getAttribute('data-id');
+        if (!techId) return;
+
+        fetch(`${apiBaseUrl}?employee_id=${techId}`)
+            .then(response => response.json())
+            .then(data => {
+                // Update the technician's total on their card header
+                const totalBadge = card.querySelector('.card-header .badge');
+                if (totalBadge) totalBadge.textContent = `${data.total_clients} clients`;
+
+                // Update the individual FSA counts within that card
+                const fsaList = card.querySelector('.fsa-list');
+                if (fsaList) {
+                    data.breakdown.forEach(item => {
+                        const fsaItem = fsaList.querySelector(`li[data-id='${item.id}']`);
+                        if (fsaItem) {
+                            const badge = fsaItem.querySelector('.badge');
+                            if (badge) badge.textContent = item.value;
+                        }
+                    });
+                }
+            })
+            .catch(error => console.error(`Error fetching tech details for ${techId}:`, error));
+    });
+
+    // --- Also handle the case where the main view is a technician ---
+    const mainFsaList = document.querySelector('.list-group.fsa-list');
+    if(mainFsaList){
+        fetch(`${apiBaseUrl}?employee_id=${mainEmployeeId}`)
+        .then(response => response.json())
+        .then(data => {
+            data.breakdown.forEach(item => {
+                const fsaItem = mainFsaList.querySelector(`li[data-id='${item.id}']`);
+                if (fsaItem) {
+                    const badge = fsaItem.querySelector('.badge');
+                    if (badge) badge.textContent = item.value;
+                }
+            });
+        });
+    }
+});
+</script>
 {% endblock %}

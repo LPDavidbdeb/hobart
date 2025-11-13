@@ -20,4 +20,6 @@ urlpatterns = [
     # API endpoints
     path('api/update-field/', views.update_employee_field_api, name='update_employee_field_api'),
     path('api/search-filter/', views.employee_search_and_filter_api, name='employee_search_filter_api'),
+    path('api/client-counts/', views.client_counts_api, name='client_counts_api'),
+    path('api/employee/<int:pk>/fsa_geometry/', views.employee_fsa_geometry_api, name='employee_fsa_geometry_api'),
 ]
