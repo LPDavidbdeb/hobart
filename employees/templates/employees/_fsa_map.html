@@ -1,0 +1,117 @@
+{% load static %}
+<div id="fsa-map-{{ employee_pk }}" style="height: 400px; width: 100%; border-radius: 0.25rem; border: 1px solid #dee2e6;"></div>
+
+<script>
+    // Define initMap globally as it's the callback for the Google Maps API script
+    window.initMap = function() {
+        const mapId = 'fsa-map-{{ employee_pk }}';
+        const employeePk = {{ employee_pk }};
+        const geometryApiUrl = "{% url geometry_api_url pk=employee_pk %}";
+
+        const mapElement = document.getElementById(mapId);
+        if (!mapElement) {
+            console.error(`Map element with ID ${mapId} not found.`);
+            return;
+        }
+
+        const map = new google.maps.Map(mapElement, {
+            center: { lat: 45.50, lng: -73.56 }, // Default view (Montreal)
+            zoom: 10,
+            mapTypeId: 'roadmap'
+        });
+
+        // Generate a consistent color for each technician
+        const colors = {};
+        let colorIndex = 0;
+        const predefinedColors = [
+            '#e6194B', '#3cb44b', '#ffe119', '#4363d8', '#f58231', '#911eb4', '#46f0f0', '#f032e6',
+            '#bcf60c', '#fabed4', '#008080', '#e6beff', '#9A6324', '#fffac8', '#800000', '#aaffc3',
+            '#808000', '#ffd8b1', '#000075', '#a9a9a9', '#ffffff', '#000000'
+        ];
+
+        // Set style for GeoJSON features
+        map.data.setStyle(function(feature) {
+            const techId = feature.getProperty('technician_id');
+            if (techId && !colors[techId]) {
+                colors[techId] = predefinedColors[colorIndex % predefinedColors.length];
+                colorIndex++;
+            }
+            const fillColor = techId ? colors[techId] : '#3388ff'; // Default blue if no techId
+            return {
+                fillColor: fillColor,
+                strokeWeight: 1,
+                strokeColor: 'white',
+                fillOpacity: 0.7
+            };
+        });
+
+        // Create an info window to display feature properties
+        const infoWindow = new google.maps.InfoWindow();
+        let currentInfoWindowFeature = null; // To track which feature the info window is for
+
+        // Show info window on mouseover
+        map.data.addListener('mouseover', function(event) {
+            const feature = event.feature;
+            let popupContent = `<strong>FSA:</strong> ${feature.getProperty('code')}<br>`;
+            if (feature.getProperty('client_count') !== undefined) {
+                popupContent += `<strong>Clients:</strong> ${feature.getProperty('client_count')}<br>`;
+            }
+            if (feature.getProperty('technician_name')) {
+                popupContent += `<strong>Technician:</strong> ${feature.getProperty('technician_name')}`;
+            }
+            infoWindow.setContent(popupContent);
+            infoWindow.setPosition(event.latLng);
+            infoWindow.setOptions({pixelOffset: new google.maps.Size(0, -30)});
+            infoWindow.open(map);
+            currentInfoWindowFeature = feature; // Store the feature
+        });
+
+        // Close info window on mouseout
+        map.data.addListener('mouseout', function() {
+            infoWindow.close();
+            currentInfoWindowFeature = null;
+        });
+
+        // Click listener for zooming and eventually showing clients
+        map.data.addListener('click', function(event) {
+            const feature = event.feature;
+            if (feature.getGeometry()) {
+                const bounds = new google.maps.LatLngBounds();
+                feature.getGeometry().forEachLatLng(function(latlng) {
+                    bounds.extend(latlng);
+                });
+                map.fitBounds(bounds);
+            }
+            // Phase 3 will add client marker logic here
+        });
+
+
+        fetch(geometryApiUrl)
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                return response.json();
+            })
+            .then(geoJsonData => {
+                if (geoJsonData.features && geoJsonData.features.length > 0) {
+                    map.data.addGeoJson(geoJsonData);
+
+                    // Fit map to bounds of the GeoJSON data
+                    const bounds = new google.maps.LatLngBounds();
+                    map.data.forEach(function(feature) {
+                        if (feature.getGeometry()) {
+                            feature.getGeometry().forEachLatLng(function(latlng) {
+                                bounds.extend(latlng);
+                            });
+                        }
+                    });
+                    map.fitBounds(bounds);
+                } else {
+                    console.log('No FSA geometry data received.');
+                    // Optionally set a default view or message if no data
+                }
+            })
+            .catch(error => console.error('Error fetching FSA geometry:', error));
+    };
+</script>

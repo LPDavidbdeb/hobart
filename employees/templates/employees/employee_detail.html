@@ -2,6 +2,10 @@
 
 {% block title %}Employee Detail: {{ employee.user.get_full_name|default:employee.user.username }}{% endblock %}
 
+{% block extra_css %}
+    {# Removed Leaflet CSS #}
+{% endblock %}
+
 {% block content %}
 <div class="container mt-4">
 
@@ -21,6 +25,14 @@
     </div>
     <p><strong>Role:</strong> {{ employee.get_role_display }}</p>
     <p><strong>Code:</strong> {{ employee.code|default:"N/A" }}</p>
+    <hr>
+
+    {# --- Include the FSA Map --- #}
+    {% if employee.role == 'TECHNICIAN' %}
+        {% include 'employees/_fsa_map.html' with employee_pk=employee.pk geometry_api_url='employees:employee_fsa_geometry_api' %}
+    {% elif employee.role == 'MANAGER' or employee.role == 'DIRECTOR' %}
+        {% include 'employees/_fsa_map.html' with employee_pk=employee.pk geometry_api_url='employees:manager_fsa_geometry_api' %}
+    {% endif %}
     <hr>
 
     {# --- Technician-specific view --- #}
@@ -78,6 +90,7 @@
 
 {% block scripts %}
 {{ block.super }}
+<script async defer src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBQPRRNJrlMVD_pIMMVwDrg8taBjlg_Oko&callback=initMap"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     const mainEmployeeId = {{ employee.pk }};
@@ -129,6 +142,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         }
                     });
                 }
+                
             })
             .catch(error => console.error(`Error fetching tech details for ${techId}:`, error));
     });

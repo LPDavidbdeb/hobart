@@ -415,7 +415,6 @@ def employee_fsa_geometry_api(request, pk):
             return JsonResponse({'error': 'Employee is not a technician'}, status=400)
 
         # Fetch all valid simplified FSA boundaries for this technician
-        # No Union operation here
         valid_fsas = employee.responsible_fsas.filter(simplified_boundary__isnull=False)
         
         if not valid_fsas.exists():
@@ -431,7 +430,8 @@ def employee_fsa_geometry_api(request, pk):
                     'properties': {
                         'code': fsa.code,
                         'client_count': fsa.client_count,
-                        'employee_name': employee.user.get_full_name()
+                        'technician_id': employee.pk, # Add technician ID for coloring
+                        'technician_name': employee.user.get_full_name()
                     }
                 })
 
@@ -444,4 +444,50 @@ def employee_fsa_geometry_api(request, pk):
         return HttpResponseBadRequest(f"Invalid employee_id: {pk}")
     except Exception as e:
         # Catch potential database errors and return a clean error
+        return JsonResponse({'error': f'An error occurred during geometry processing: {str(e)}'}, status=500)
+
+@login_required
+def manager_fsa_geometry_api(request, pk):
+    try:
+        employee = get_object_or_404(EmployeeProfile, pk=pk)
+
+        if employee.role not in [EmployeeProfile.Role.MANAGER, EmployeeProfile.Role.DIRECTOR]:
+            return JsonResponse({'error': 'Employee is not a manager or director'}, status=400)
+
+        # Collect all subordinate technicians
+        subordinate_technicians = set()
+        if employee.role == EmployeeProfile.Role.MANAGER:
+            subordinate_technicians.update(employee.subordinates.filter(role=EmployeeProfile.Role.TECHNICIAN))
+        elif employee.role == EmployeeProfile.Role.DIRECTOR:
+            managers = employee.subordinates.filter(role=EmployeeProfile.Role.MANAGER)
+            for manager in managers:
+                subordinate_technicians.update(manager.subordinates.filter(role=EmployeeProfile.Role.TECHNICIAN))
+        
+        features = []
+        # Removed processed_fsa_codes set to allow all FSAs to be included,
+        # even if shared by multiple technicians, for proper color-coding.
+
+        for tech in subordinate_technicians:
+            valid_fsas = tech.responsible_fsas.filter(simplified_boundary__isnull=False)
+            for fsa in valid_fsas:
+                if fsa.simplified_boundary:
+                    features.append({
+                        'type': 'Feature',
+                        'geometry': json.loads(fsa.simplified_boundary.json),
+                        'properties': {
+                            'code': fsa.code,
+                            'client_count': fsa.client_count,
+                            'technician_id': tech.pk, # Associate FSA with the technician
+                            'technician_name': tech.user.get_full_name()
+                        }
+                    })
+
+        return JsonResponse({
+            'type': 'FeatureCollection',
+            'features': features
+        })
+
+    except (EmployeeProfile.DoesNotExist, ValueError):
+        return HttpResponseBadRequest(f"Invalid employee_id: {pk}")
+    except Exception as e:
         return JsonResponse({'error': f'An error occurred during geometry processing: {str(e)}'}, status=500)
