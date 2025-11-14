@@ -528,3 +528,28 @@ def fsa_clients_api(request, fsa_code):
         return HttpResponseBadRequest(f"FSA with code '{fsa_code}' not found.")
     except Exception as e:
         return JsonResponse({'error': f'An error occurred fetching clients: {str(e)}'}, status=500)
+
+@login_required
+def employee_role_search_api(request):
+    role = request.GET.get('role', '').upper()
+    query = request.GET.get('q', '')
+
+    if not role:
+        return HttpResponseBadRequest("Role parameter is required.")
+
+    # Validate role against the choices in EmployeeProfile
+    valid_roles = [r[0] for r in EmployeeProfile.Role.choices]
+    if role not in valid_roles:
+        return HttpResponseBadRequest(f"Invalid role specified. Must be one of: {', '.join(valid_roles)}")
+
+    queryset = EmployeeProfile.objects.filter(role=role).select_related('user', 'address').order_by('user__first_name')
+
+    if query:
+        queryset = queryset.filter(
+            Q(user__first_name__icontains=query) |
+            Q(user__last_name__icontains=query) |
+            Q(code__icontains=query)
+        )
+
+    html = render_to_string('employees/_employee_list_rows.html', {'object_list': queryset})
+    return JsonResponse({'html': html})

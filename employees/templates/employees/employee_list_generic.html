@@ -14,6 +14,11 @@
         </button>
     </div>
 
+    <!-- Search Input -->
+    <div class="mb-3">
+        <input type="text" id="employee-search-input" class="form-control" placeholder="Search by name or code...">
+    </div>
+
     <div class="table-responsive">
         <table class="table table-striped table-bordered">
             <thead class="table-dark">
@@ -23,31 +28,12 @@
                     <th>Email</th>
                     <th>Code</th>
                     <th>Address Status</th>
+                    <th>Postal Code Status</th>
                     <th>Actions</th>
                 </tr>
             </thead>
-            <tbody>
-                {% for employee in object_list %}
-                <tr>
-                    <td>{{ employee.user.get_full_name }}</td>
-                    <td><strong>{{ employee.user.username }}</strong></td>
-                    <td>{{ employee.user.email }}</td>
-                    <td>{{ employee.code }}</td>
-                    <td>
-                        {% if employee.address_status %}
-                            <span class="badge {{ employee.address_status.badge_class }}">{{ employee.address_status.name }}</span>
-                        {% endif %}
-                    </td>
-                    <td>
-                        <a href="{% url 'employees:employee_detail' pk=employee.pk %}" class="btn btn-sm btn-info">View</a>
-                        <a href="{% url 'employees:edit_employee' pk=employee.pk %}" class="btn btn-sm btn-outline-secondary">Edit</a>
-                    </td>
-                </tr>
-                {% empty %}
-                <tr>
-                    <td colspan="6" class="text-center">No employees with the role '{{ role_name }}' found.</td>
-                </tr>
-                {% endfor %}
+            <tbody id="employee-table-body">
+                {% include 'employees/_employee_list_rows.html' %}
             </tbody>
         </table>
     </div>
@@ -132,5 +118,30 @@
     });
 </script>
 {% endif %}
+{% endblock %}
 
+{% block scripts %}
+{{ block.super }}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const searchInput = document.getElementById('employee-search-input');
+    const tableBody = document.getElementById('employee-table-body');
+    const searchUrl = "{% url 'employees:employee_role_search_api' %}";
+    const employeeRole = "{{ role_name|upper }}"; // Get the role from the context
+
+    searchInput.addEventListener('keyup', function() {
+        const query = searchInput.value;
+        
+        fetch(`${searchUrl}?role=${employeeRole}&q=${query}`)
+            .then(response => response.json())
+            .then(data => {
+                tableBody.innerHTML = data.html;
+            })
+            .catch(error => {
+                console.error('Error during search:', error);
+                tableBody.innerHTML = '<tr><td colspan="7" class="text-center text-danger">An error occurred.</td></tr>';
+            });
+    });
+});
+</script>
 {% endblock %}

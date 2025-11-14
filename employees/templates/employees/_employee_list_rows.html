@@ -1,0 +1,30 @@
+{% for employee in object_list %}
+<tr>
+    <td><a href="{{ employee.get_absolute_url }}">{{ employee.user.get_full_name|default:employee.user.username }}</a></td>
+    <td><strong>{{ employee.user.username }}</strong></td>
+    <td>{{ employee.user.email }}</td>
+    <td>{{ employee.code|default:"N/A" }}</td>
+    <td>
+        {% if employee.address_status %}
+            <span class="badge {{ employee.address_status.badge_class }}">{{ employee.address_status.name }}</span>
+        {% else %}
+            <span class="badge bg-secondary">N/A</span>
+        {% endif %}
+    </td>
+    <td>
+        {% if employee.postal_code %}
+            <span class="badge bg-success">Set</span>
+        {% else %}
+            <span class="badge bg-secondary">Missing</span>
+        {% endif %}
+    </td>
+    <td>
+        <a href="{% url 'employees:employee_detail' pk=employee.pk %}" class="btn btn-sm btn-info">View</a>
+        <a href="{% url 'employees:edit_employee' pk=employee.pk %}" class="btn btn-sm btn-outline-secondary">Edit</a>
+    </td>
+</tr>
+{% empty %}
+<tr>
+    <td colspan="7" class="text-center">No employees found matching your search.</td>
+</tr>
+{% endfor %}

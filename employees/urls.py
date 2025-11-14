@@ -24,4 +24,5 @@ urlpatterns = [
     path('api/employee/<int:pk>/fsa_geometry/', views.employee_fsa_geometry_api, name='employee_fsa_geometry_api'),
     path('api/manager/<int:pk>/fsa_geometry/', views.manager_fsa_geometry_api, name='manager_fsa_geometry_api'),
     path('api/fsa/<str:fsa_code>/clients/', views.fsa_clients_api, name='fsa_clients_api'),
+    path('api/employee-role-search/', views.employee_role_search_api, name='employee_role_search_api'),
 ]
