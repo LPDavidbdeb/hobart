@@ -1,7 +1,9 @@
 import csv
 import io
 import json
+import re
 from django.shortcuts import render, redirect, get_object_or_404
+from django.urls import reverse
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
@@ -18,6 +20,8 @@ from .forms import TerritoryAssignmentForm, DirectorCreationForm, ManagerCreatio
 from client.forms import CsvUploadForm # Corrected import
 from .utils import create_employee
 from address.forms import AddressSearchForm
+from client.models import Client
+from address.models import Address, FSA
 
 # --- Permissions --- 
 def is_admin_or_director(user):
@@ -491,3 +495,36 @@ def manager_fsa_geometry_api(request, pk):
         return HttpResponseBadRequest(f"Invalid employee_id: {pk}")
     except Exception as e:
         return JsonResponse({'error': f'An error occurred during geometry processing: {str(e)}'}, status=500)
+
+@login_required
+def fsa_clients_api(request, fsa_code):
+    try:
+        # Find the FSA object
+        fsa_obj = get_object_or_404(FSA, code=fsa_code.upper())
+
+        # Filter clients that have a non-null address, valid lat/lng,
+        # and whose address.location intersects with the FSA's boundary
+        clients = Client.objects.filter(
+            address__isnull=False,
+            address__latitude__isnull=False,
+            address__longitude__isnull=False,
+            address__location__intersects=fsa_obj.boundary # Spatial filter
+        ).select_related('address') # Select related address to avoid N+1 queries
+
+        client_data = []
+        for client in clients:
+            address = client.address
+            # Still check for is_degenerate as it's a business rule for address validity
+            if not address.is_degenerate():
+                client_data.append({
+                    'name': client.name,
+                    'lat': float(address.latitude),
+                    'lng': float(address.longitude),
+                    'account_number': client.account_number,
+                    'url': reverse('client:client_detail', kwargs={'pk': client.pk})
+                })
+        return JsonResponse({'clients': client_data})
+    except FSA.DoesNotExist:
+        return HttpResponseBadRequest(f"FSA with code '{fsa_code}' not found.")
+    except Exception as e:
+        return JsonResponse({'error': f'An error occurred fetching clients: {str(e)}'}, status=500)

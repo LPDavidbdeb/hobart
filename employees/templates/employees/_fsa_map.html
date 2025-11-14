@@ -7,6 +7,7 @@
         const mapId = 'fsa-map-{{ employee_pk }}';
         const employeePk = {{ employee_pk }};
         const geometryApiUrl = "{% url geometry_api_url pk=employee_pk %}";
+        const fsaClientsApiBaseUrl = "{% url 'employees:fsa_clients_api' fsa_code='DUMMY' %}".replace('DUMMY/clients/', ''); 
 
         const mapElement = document.getElementById(mapId);
         if (!mapElement) {
@@ -24,13 +25,12 @@
         const colors = {};
         let colorIndex = 0;
         const predefinedColors = [
-            '#e6194B', '#3cb44b', '#ffe119', '#4363d8', '#f58231', '#911eb4', '#46f0f0', '#f032e6',
+            '#e6194B', '#3cb44b', '#ffe119', '#4363d8', '#f58231', '#911eb4', '#46f0f0', '#f032e0',
             '#bcf60c', '#fabed4', '#008080', '#e6beff', '#9A6324', '#fffac8', '#800000', '#aaffc3',
             '#808000', '#ffd8b1', '#000075', '#a9a9a9', '#ffffff', '#000000'
         ];
 
-        // Set style for GeoJSON features
-        map.data.setStyle(function(feature) {
+        let defaultFsaStyle = function(feature) {
             const techId = feature.getProperty('technician_id');
             if (techId && !colors[techId]) {
                 colors[techId] = predefinedColors[colorIndex % predefinedColors.length];
@@ -43,11 +43,25 @@
                 strokeColor: 'white',
                 fillOpacity: 0.7
             };
-        });
+        };
+
+        // Set initial style for GeoJSON features
+        map.data.setStyle(defaultFsaStyle);
 
         // Create an info window to display feature properties
         const infoWindow = new google.maps.InfoWindow();
-        let currentInfoWindowFeature = null; // To track which feature the info window is for
+        
+        // Array to store client markers
+        let clientMarkers = [];
+        let currentSelectedFsaFeature = null; // To track the currently selected FSA feature
+
+        // Function to clear all client markers
+        function clearClientMarkers() {
+            for (let i = 0; i < clientMarkers.length; i++) {
+                clientMarkers[i].setMap(null);
+            }
+            clientMarkers = [];
+        }
 
         // Show info window on mouseover
         map.data.addListener('mouseover', function(event) {
@@ -63,18 +77,26 @@
             infoWindow.setPosition(event.latLng);
             infoWindow.setOptions({pixelOffset: new google.maps.Size(0, -30)});
             infoWindow.open(map);
-            currentInfoWindowFeature = feature; // Store the feature
         });
 
         // Close info window on mouseout
         map.data.addListener('mouseout', function() {
             infoWindow.close();
-            currentInfoWindowFeature = null;
         });
 
-        // Click listener for zooming and eventually showing clients
+        // Click listener for zooming and showing clients
         map.data.addListener('click', function(event) {
             const feature = event.feature;
+            const fsaCode = feature.getProperty('code');
+
+            // 1. Reset style of previously selected FSA and set style for current FSA
+            if (currentSelectedFsaFeature) {
+                map.data.overrideStyle(currentSelectedFsaFeature, defaultFsaStyle(currentSelectedFsaFeature));
+            }
+            map.data.overrideStyle(feature, { fillOpacity: 0.0, strokeWeight: 0 }); // Make clicked FSA transparent
+            currentSelectedFsaFeature = feature;
+
+            // 2. Zoom to FSA
             if (feature.getGeometry()) {
                 const bounds = new google.maps.LatLngBounds();
                 feature.getGeometry().forEachLatLng(function(latlng) {
@@ -82,7 +104,44 @@
                 });
                 map.fitBounds(bounds);
             }
-            // Phase 3 will add client marker logic here
+
+            // 3. Clear existing client markers
+            clearClientMarkers();
+
+            // 4. Fetch and display clients for the clicked FSA
+            if (fsaCode) {
+                const clientApiUrl = `${fsaClientsApiBaseUrl}${fsaCode}/clients/`;
+                fetch(clientApiUrl)
+                    .then(response => {
+                        if (!response.ok) {
+                            throw new Error(`HTTP error! status: ${response.status}`);
+                        }
+                        return response.json();
+                    })
+                    .then(data => {
+                        if (data.clients && data.clients.length > 0) {
+                            data.clients.forEach(client => {
+                                const clientLatLng = { lat: client.lat, lng: client.lng };
+                                const marker = new google.maps.Marker({
+                                    position: clientLatLng,
+                                    map: map,
+                                    title: client.name,
+                                    // Use default red pin by not specifying an icon
+                                });
+
+                                // Add click listener to redirect to client detail page
+                                marker.addListener('click', () => {
+                                    window.location.href = client.url;
+                                });
+
+                                clientMarkers.push(marker);
+                            });
+                        } else {
+                            console.log(`No clients found for FSA: ${fsaCode}`);
+                        }
+                    })
+                    .catch(error => console.error(`Error fetching clients for FSA ${fsaCode}:`, error));
+            }
         });
 
 
@@ -97,7 +156,6 @@
                 if (geoJsonData.features && geoJsonData.features.length > 0) {
                     map.data.addGeoJson(geoJsonData);
 
-                    // Fit map to bounds of the GeoJSON data
                     const bounds = new google.maps.LatLngBounds();
                     map.data.forEach(function(feature) {
                         if (feature.getGeometry()) {

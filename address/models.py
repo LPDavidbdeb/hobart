@@ -39,6 +39,25 @@ class FSA(gis_models.Model):
     def __str__(self):
         return self.code
 
+class PostalCode(gis_models.Model):
+    """
+    Represents a 6-character Canadian postal code and its geocoded location.
+    """
+    code = gis_models.CharField(max_length=7, unique=True, db_index=True, help_text="The 6 or 7-character postal code (e.g., H2X1X6).")
+    latitude = gis_models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    longitude = gis_models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    location = gis_models.PointField(null=True, blank=True, srid=4326, help_text="The geocoded point for this postal code.")
+    last_geocoded = gis_models.DateTimeField(null=True, blank=True, help_text="When the postal code was last geocoded.")
+
+    class Meta:
+        verbose_name = "Postal Code"
+        verbose_name_plural = "Postal Codes"
+        ordering = ['code']
+        app_label = 'address'
+
+    def __str__(self):
+        return self.code
+
 class AddressStatus(gis_models.Model):
     name = gis_models.CharField(max_length=50, unique=True)
     description = gis_models.TextField(blank=True)

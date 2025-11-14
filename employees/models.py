@@ -3,7 +3,7 @@
 from django.db import models
 from django.conf import settings
 from django.urls import reverse
-from address.models import Address, AddressStatus, FSA
+from address.models import Address, AddressStatus, FSA, PostalCode
 from organization.models import Territory
 
 
@@ -49,10 +49,11 @@ class EmployeeProfile(models.Model):
         related_name='technicians',
         help_text="FSAs a Technician is directly responsible for."
     )
-    postal_code = models.CharField(
-        max_length=7,
-        blank=True,
+    postal_code = models.ForeignKey(
+        PostalCode,
+        on_delete=models.SET_NULL,
         null=True,
+        blank=True,
         help_text="The employee's home postal code. Used as a starting point for location and distance calculations."
     )
 
