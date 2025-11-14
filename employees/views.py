@@ -16,12 +16,16 @@ from django.contrib.gis.db.models.functions import AsGeoJSON # Removed Union
 from django.template.loader import render_to_string
 from .models import EmployeeProfile
 from organization.models import Territory
-from .forms import TerritoryAssignmentForm, DirectorCreationForm, ManagerCreationForm, TechnicianCreationForm
+from .forms import TerritoryAssignmentForm, DirectorCreationForm, ManagerCreationForm, TechnicianCreationForm, EditEmployeeForm
 from client.forms import CsvUploadForm # Corrected import
 from .utils import create_employee
 from address.forms import AddressSearchForm
 from client.models import Client
-from address.models import Address, FSA
+from address.models import Address, FSA, PostalCode
+from django.conf import settings
+import googlemaps
+from django.contrib.gis.geos import Point
+from django.utils import timezone
 
 # --- Permissions --- 
 def is_admin_or_director(user):
@@ -97,6 +101,12 @@ class TechnicianListView(BaseEmployeeListView):
     form_class = TechnicianCreationForm
     page_title = "Technician List"
 
+    def get_queryset(self):
+        # Annotate the queryset with the total number of clients for each technician
+        return super().get_queryset().annotate(
+            total_clients=Sum('responsible_fsas__client_count')
+        )
+
 # --- Employee List View (All Employees) ---
 class EmployeeListView(ListView):
     model = EmployeeProfile
@@ -110,20 +120,16 @@ class EmployeeListView(ListView):
 @user_passes_test(lambda u: u.is_superuser)
 def edit_employee_view(request, pk):
     profile = get_object_or_404(EmployeeProfile, pk=pk)
-    user_to_edit = profile.user
     if request.method == 'POST':
-        # form = EditEmployeeForm(request.POST, instance=user_to_edit) # This form doesn't exist yet
-        # if form.is_valid():
-        #     form.save()
-        #     messages.success(request, f"Successfully updated {user_to_edit.get_full_name()} and regenerated credentials.")
-        #     if profile.role == EmployeeProfile.Role.MANAGER:
-        #         return redirect('employees:manager_list')
-        #     return redirect('employees:employee_list')
-        pass # Placeholder
+        form = EditEmployeeForm(request.POST, instance=profile, user_instance=profile.user)
+        if form.is_valid():
+            form.save()
+            messages.success(request, f"Successfully updated {profile.user.get_full_name()}.")
+            return redirect(profile.get_absolute_url())
     else:
-        # form = EditEmployeeForm(instance=user_to_edit)
-        pass # Placeholder
-    return render(request, 'employees/edit_employee.html', {'form': None, 'employee': profile})
+        form = EditEmployeeForm(instance=profile, user_instance=profile.user)
+        
+    return render(request, 'employees/edit_employee.html', {'form': form, 'employee': profile})
 
 class EmployeeDetailView(DetailView):
     model = EmployeeProfile
@@ -553,3 +559,50 @@ def employee_role_search_api(request):
 
     html = render_to_string('employees/_employee_list_rows.html', {'object_list': queryset})
     return JsonResponse({'html': html})
+
+@login_required
+@user_passes_test(lambda u: u.is_superuser)
+def geocode_and_set_postal_code_api(request):
+    if request.method == 'POST':
+        try:
+            data = json.loads(request.body)
+            employee_id = data.get('employee_id')
+            postal_code_str = data.get('postal_code', '').strip().upper().replace(' ', '')
+
+            if not employee_id or not postal_code_str:
+                return JsonResponse({'status': 'error', 'message': 'Employee ID and postal code are required.'}, status=400)
+
+            employee = get_object_or_404(EmployeeProfile, pk=employee_id)
+            
+            # Get or create the postal code object
+            postal_code_obj, created = PostalCode.objects.get_or_create(code=postal_code_str)
+
+            # If it's a new postal code or doesn't have a location, geocode it
+            if created or not postal_code_obj.location:
+                if not hasattr(settings, 'GOOGLE_MAPS_API_KEY') or not settings.GOOGLE_MAPS_API_KEY:
+                    return JsonResponse({'status': 'error', 'message': 'Google Maps API key is not configured.'}, status=500)
+                
+                gmaps = googlemaps.Client(key=settings.GOOGLE_MAPS_API_KEY)
+                geocode_result = gmaps.geocode(f'{postal_code_str}, Canada')
+
+                if not geocode_result:
+                    return JsonResponse({'status': 'error', 'message': f'Could not geocode postal code: {postal_code_str}'}, status=400)
+
+                location = geocode_result[0]['geometry']['location']
+                lat, lng = location['lat'], location['lng']
+                postal_code_obj.latitude = lat
+                postal_code_obj.longitude = lng
+                postal_code_obj.location = Point(lng, lat, srid=4326)
+                postal_code_obj.last_geocoded = timezone.now()
+                postal_code_obj.save()
+
+            # Assign the postal code to the employee
+            employee.postal_code = postal_code_obj
+            employee.save()
+
+            return JsonResponse({'status': 'success', 'message': f'Successfully assigned postal code {postal_code_str}.', 'postal_code': postal_code_str})
+
+        except Exception as e:
+            return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+            
+    return JsonResponse({'status': 'error', 'message': 'Invalid request method.'}, status=405)

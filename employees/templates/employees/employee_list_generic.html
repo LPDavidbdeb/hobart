@@ -29,6 +29,7 @@
                     <th>Code</th>
                     <th>Address Status</th>
                     <th>Postal Code Status</th>
+                    <th>Total Clients</th>
                     <th>Actions</th>
                 </tr>
             </thead>
@@ -139,7 +140,7 @@ document.addEventListener('DOMContentLoaded', function() {
             })
             .catch(error => {
                 console.error('Error during search:', error);
-                tableBody.innerHTML = '<tr><td colspan="7" class="text-center text-danger">An error occurred.</td></tr>';
+                tableBody.innerHTML = '<tr><td colspan="8" class="text-center text-danger">An error occurred.</td></tr>';
             });
     });
 });

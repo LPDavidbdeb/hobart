@@ -4,19 +4,22 @@
     <td><strong>{{ employee.user.username }}</strong></td>
     <td>{{ employee.user.email }}</td>
     <td>{{ employee.code|default:"N/A" }}</td>
-    <td>
+    <td class="text-center">
         {% if employee.address_status %}
             <span class="badge {{ employee.address_status.badge_class }}">{{ employee.address_status.name }}</span>
         {% else %}
             <span class="badge bg-secondary">N/A</span>
         {% endif %}
     </td>
-    <td>
+    <td class="text-center">
         {% if employee.postal_code %}
             <span class="badge bg-success">Set</span>
         {% else %}
             <span class="badge bg-secondary">Missing</span>
         {% endif %}
+    </td>
+    <td class="text-end">
+        {{ employee.total_clients|default:0 }}
     </td>
     <td>
         <a href="{% url 'employees:employee_detail' pk=employee.pk %}" class="btn btn-sm btn-info">View</a>
@@ -25,6 +28,6 @@
 </tr>
 {% empty %}
 <tr>
-    <td colspan="7" class="text-center">No employees found matching your search.</td>
+    <td colspan="8" class="text-center">No employees found matching your search.</td>
 </tr>
 {% endfor %}

@@ -7,21 +7,102 @@
             <div class="card">
                 <div class="card-header">
                     <h3>Edit Employee: {{ employee.user.get_full_name }}</h3>
-                    <p class="text-muted">Current Username: {{ employee.user.username }} | Current Code: {{ employee.code }}</p>
+                    <p class="text-muted">Current Username: {{ employee.user.username }}</p>
                 </div>
                 <div class="card-body">
-                    <p>Changing the first or last name will automatically regenerate the employee's username, email, and code.</p>
                     <form method="post">
                         {% csrf_token %}
                         {{ form.as_p }}
                         <div class="d-flex justify-content-end mt-3">
-                            <a href="{% url 'employees:manager_list' %}" class="btn btn-secondary me-2">Cancel</a>
+                            <a href="{{ employee.get_absolute_url }}" class="btn btn-secondary me-2">Cancel</a>
                             <button type="submit" class="btn btn-primary">Save Changes</button>
                         </div>
                     </form>
                 </div>
             </div>
+
+            <div class="card mt-4">
+                <div class="card-header">
+                    <h4>Postal Code Management</h4>
+                </div>
+                <div class="card-body">
+                    <div id="postal-code-section">
+                        <p><strong>Current Postal Code:</strong> 
+                            <span id="current-postal-code">
+                                {% if employee.postal_code %}
+                                    {{ employee.postal_code.code }}
+                                {% else %}
+                                    <span class="text-muted">Not set</span>
+                                {% endif %}
+                            </span>
+                        </p>
+                    </div>
+                    <hr>
+                    <h5>Assign New Postal Code</h5>
+                    <div class="input-group">
+                        <input type="text" id="postal-code-search-input" class="form-control" placeholder="Enter 6-character postal code (e.g., A1A1A1)">
+                        <button class="btn btn-outline-primary" type="button" id="assign-postal-code-btn">Search & Assign</button>
+                    </div>
+                    <div id="postal-code-message" class="mt-2"></div>
+                </div>
+            </div>
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+{{ block.super }}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const assignBtn = document.getElementById('assign-postal-code-btn');
+    const searchInput = document.getElementById('postal-code-search-input');
+    const messageDiv = document.getElementById('postal-code-message');
+    const currentPostalCodeSpan = document.getElementById('current-postal-code');
+    const employeeId = {{ employee.pk }};
+    const apiUrl = "{% url 'employees:geocode_and_set_postal_code_api' %}";
+
+    assignBtn.addEventListener('click', function() {
+        const postalCode = searchInput.value;
+        if (!postalCode) {
+            messageDiv.className = 'alert alert-warning';
+            messageDiv.textContent = 'Please enter a postal code.';
+            return;
+        }
+
+        messageDiv.className = 'alert alert-info';
+        messageDiv.textContent = 'Assigning...';
+
+        fetch(apiUrl, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': '{{ csrf_token }}'
+            },
+            body: JSON.stringify({
+                employee_id: employeeId,
+                postal_code: postalCode
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.status === 'success') {
+                messageDiv.className = 'alert alert-success';
+                messageDiv.textContent = data.message;
+                currentPostalCodeSpan.textContent = data.postal_code;
+                currentPostalCodeSpan.className = ''; // Remove text-muted if it was there
+                searchInput.value = ''; // Clear input on success
+            } else {
+                messageDiv.className = 'alert alert-danger';
+                messageDiv.textContent = data.message || 'An unknown error occurred.';
+            }
+        })
+        .catch(error => {
+            messageDiv.className = 'alert alert-danger';
+            messageDiv.textContent = 'A network error occurred. Please try again.';
+            console.error('Error:', error);
+        });
+    });
+});
+</script>
 {% endblock %}
