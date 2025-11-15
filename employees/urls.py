@@ -17,13 +17,17 @@ urlpatterns = [
     path('upload-csv/', views.upload_csv_view, name='upload_csv'),
     path('assign-territories/', views.territory_assignment_upload, name='territory_assignment_upload'), # New URL
 
+    # Promotion and Deletion URLs
+    path('promote/<int:pk>/', views.promote_technician, name='promote_technician'),
+    path('delete/technician/<int:pk>/', views.delete_technician, name='delete_technician'),
+
     # API endpoints
     path('api/update-field/', views.update_employee_field_api, name='update_employee_field_api'),
-    path('api/search-filter/', views.employee_search_and_filter_api, name='employee_search_filter_api'),
     path('api/client-counts/', views.client_counts_api, name='client_counts_api'),
     path('api/employee/<int:pk>/fsa_geometry/', views.employee_fsa_geometry_api, name='employee_fsa_geometry_api'),
     path('api/manager/<int:pk>/fsa_geometry/', views.manager_fsa_geometry_api, name='manager_fsa_geometry_api'),
     path('api/fsa/<str:fsa_code>/clients/', views.fsa_clients_api, name='fsa_clients_api'),
     path('api/employee-role-search/', views.employee_role_search_api, name='employee_role_search_api'),
+    path('api/employee-search-filter/', views.employee_search_filter_api, name='employee_search_filter_api'), # New API endpoint
     path('api/geocode-postal-code/', views.geocode_and_set_postal_code_api, name='geocode_and_set_postal_code_api'),
 ]

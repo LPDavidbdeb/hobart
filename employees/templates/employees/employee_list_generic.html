@@ -1,147 +1,156 @@
-{% extends 'base.html' %}
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}{{ page_title }}{% endblock %}
 
 {% block content %}
 <div class="container mt-4">
     <div class="d-flex justify-content-between align-items-center mb-3">
-        <div class="d-flex align-items-center">
-            <h2 class="mb-0">{{ page_title }}</h2>
-            <a href="#" class="ms-3" data-bs-toggle="modal" data-bs-target="#helpModal" aria-label="Help with creation rules">
-                <i class="bi bi-question-circle-fill fs-4"></i>
-            </a>
-        </div>
-        <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addEmployeeModal">
-            Add {{ role_name }}
+        <h1>{{ page_title }}</h1>
+        {% if form %}
+        <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#addEmployeeModal">
+            Add New {{ role_name }}
         </button>
+        {% endif %}
     </div>
 
-    <!-- Search Input -->
+    <!-- Search Bar -->
     <div class="mb-3">
-        <input type="text" id="employee-search-input" class="form-control" placeholder="Search by name or code...">
+        <input type="text" id="employeeSearchInput" class="form-control" placeholder="Search by name or code...">
     </div>
 
     <div class="table-responsive">
-        <table class="table table-striped table-bordered">
-            <thead class="table-dark">
+        <table class="table table-striped">
+            <thead>
                 <tr>
-                    <th>Full Name</th>
-                    <th>Username</th>
-                    <th>Email</th>
-                    <th>Code</th>
-                    <th>Address Status</th>
-                    <th>Postal Code Status</th>
-                    <th>Total Clients</th>
-                    <th>Actions</th>
+                    <th class="text-center">Name</th>
+                    <th class="text-center">Postal Code Status</th>
+                    <th class="text-center">Address Status</th>
+                    <th class="text-center">Client Count</th>
+                    <th class="text-center">Actions</th>
                 </tr>
             </thead>
-            <tbody id="employee-table-body">
-                {% include 'employees/_employee_list_rows.html' %}
+            <tbody id="employeeTableBody">
+                {% include 'employees/_employee_table_rows.html' %}
             </tbody>
         </table>
     </div>
 </div>
 
 <!-- Add Employee Modal -->
+{% if form %}
 <div class="modal fade" id="addEmployeeModal" tabindex="-1" aria-labelledby="addEmployeeModalLabel" aria-hidden="true">
-  <div class="modal-dialog">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h5 class="modal-title" id="addEmployeeModalLabel">Add New {{ role_name }}</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-      </div>
-      <div class="modal-body">
-        <form method="post" action="{{ request.path }}">
-            {% csrf_token %}
-            {{ form.as_p }}
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-                <button type="submit" class="btn btn-primary">Save {{ role_name }}</button>
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="addEmployeeModalLabel">Add New {{ role_name }}</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
-        </form>
-      </div>
+            <form method="post">
+                {% csrf_token %}
+                <div class="modal-body">
+                    {{ form.as_p }}
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Close</button>
+                    <button type="submit" class="btn btn-outline-primary">Save</button>
+                </div>
+            </form>
+        </div>
     </div>
-  </div>
 </div>
-
-<!-- Help Modal (Content is generic and can be shared) -->
-<div class="modal fade" id="helpModal" tabindex="-1" aria-labelledby="helpModalLabel" aria-hidden="true">
-  <div class="modal-dialog modal-lg">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h5 class="modal-title" id="helpModalLabel">Règles de Création Automatique des Employés</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-      </div>
-      <div class="modal-body">
-        <p>Lors de la création d'un nouvel employé, plusieurs champs sont générés automatiquement pour assurer la cohérence et la sécurité.</p>
-        
-        <h6>Nom d'utilisateur (Username)</h6>
-        <ul>
-            <li>Généré à partir de la <strong>première lettre du prénom</strong> et des <strong>8 premières lettres du nom de famille</strong>.</li>
-            <li>Exemple : <em>Jean-Claude Van Damme</em> → <code>jvandamme</code>.</li>
-            <li>Le système assure que chaque nom d'utilisateur est unique. Si <code>jvandamme</code> existe, il essaiera <code>jvandamme1</code>, <code>jvandamme2</code>, etc.</li>
-        </ul>
-
-        <h6>Adresse Courriel (Email)</h6>
-        <ul>
-            <li>Générée en joignant le prénom et le nom de famille avec un point, suivi de <code>@hobart.ca</code>.</li>
-            <li>Les caractères accentués (comme <code>é</code>, <code>à</code>) sont remplacés par leur équivalent simple (e.g., <code>e</code>, <code>a</code>).</li>
-            <li>Les espaces et les tirets sont supprimés.</li>
-            <li>Exemple : <em>Dave Doré</em> → <code>dave.dore@hobart.ca</code>.</li>
-            <li>Le système assure que chaque adresse courriel est unique.</li>
-        </ul>
-
-        <h6>Code Employé</h6>
-        <ul>
-            <li>Généré à partir de la <strong>première lettre du prénom</strong> et de la <strong>première lettre du nom de famille</strong>.</li>
-            <li>Exemple : <em>Dave Doré</em> → <code>DD</code>.</li>
-            <li>Le système assure que chaque code est unique en ajoutant un numéro à la fin. Si <code>DD1</code> et <code>DD2</code> existent, le prochain sera <code>DD3</code>.</li>
-        </ul>
-
-        <h6>Mot de passe (Password)</h6>
-        <ul>
-            <li><strong>Aucun mot de passe n'est défini à la création.</strong> Le compte est créé avec un mot de passe inutilisable.</li>
-            <li>L'employé devra utiliser la fonction "mot de passe oublié" pour définir son propre mot de passe lors de sa première connexion.</li>
-        </ul>
-
-        <p class="mt-3">La modification du nom ou du prénom d'un employé via le bouton "Edit" régénérera automatiquement ces trois champs pour maintenir la cohérence.</p>
-      </div>
-      <div class="modal-footer">
-        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fermer</button>
-      </div>
-    </div>
-  </div>
-</div>
-
-{% if form_errors %}
-<script>
-    document.addEventListener('DOMContentLoaded', function() {
-        var addModal = new bootstrap.Modal(document.getElementById('addEmployeeModal'));
-        addModal.show();
-    });
-</script>
 {% endif %}
+
+<!-- Delete Technician Modals -->
+{% if role_name == 'Technician' %}
+    {% for employee in object_list %}
+        <div class="modal fade" id="deleteTechnicianModal-{{ employee.pk }}" tabindex="-1" aria-labelledby="deleteModalLabel-{{ employee.pk }}" aria-hidden="true">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="deleteModalLabel-{{ employee.pk }}">Delete Technician: {{ employee.user.get_full_name }}</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <form action="{% url 'employees:delete_technician' employee.pk %}" method="POST">
+                        {% csrf_token %}
+                        <div class="modal-body">
+                            {% if employee.responsible_fsas.exists %}
+                                <p>This technician has assigned FSAs. To delete this profile, you must first transfer their responsibilities to a successor.</p>
+                                <div class="mb-3">
+                                    <label for="successor_technician-{{ employee.pk }}" class="form-label"><strong>Select Successor:</strong></label>
+                                    <select class="form-select" name="successor_technician" id="successor_technician-{{ employee.pk }}" required>
+                                        <option value="">--- Choose a technician ---</option>
+                                        {% for tech in all_technicians %}
+                                            {% if tech.pk != employee.pk %}
+                                                <option value="{{ tech.pk }}">{{ tech.user.get_full_name }}</option>
+                                            {% endif %}
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                            {% else %}
+                                <p>Are you sure you want to delete the profile for <strong>{{ employee.user.get_full_name }}</strong>? This action cannot be undone.</p>
+                            {% endif %}
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                            <button type="submit" class="btn btn-outline-danger">
+                                {% if employee.responsible_fsas.exists %}Transfer and Delete{% else %}Confirm Delete{% endif %}
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    {% endfor %}
+{% endif %}
+
 {% endblock %}
 
 {% block scripts %}
 {{ block.super }}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    const searchInput = document.getElementById('employee-search-input');
-    const tableBody = document.getElementById('employee-table-body');
+    const searchInput = document.getElementById('employeeSearchInput');
+    const tableBody = document.getElementById('employeeTableBody');
     const searchUrl = "{% url 'employees:employee_role_search_api' %}";
-    const employeeRole = "{{ role_name|upper }}"; // Get the role from the context
+    const role = "{{ role_name }}";
 
+    function fetchClientCounts() {
+        const countCells = document.querySelectorAll('.client-count-cell');
+        countCells.forEach(cell => {
+            const employeeId = cell.getAttribute('data-employee-id');
+            if (employeeId) {
+                fetch(`{% url 'employees:client_counts_api' %}?employee_id=${employeeId}`)
+                    .then(response => response.json())
+                    .then(data => {
+                        cell.textContent = data.total_clients;
+                    })
+                    .catch(error => {
+                        console.error('Error fetching client count:', error);
+                        cell.textContent = 'Error';
+                    });
+            }
+        });
+    }
+
+    // Initial load
+    fetchClientCounts();
+
+    let timeout = null;
     searchInput.addEventListener('keyup', function() {
+        clearTimeout(timeout);
         const query = searchInput.value;
-        
-        fetch(`${searchUrl}?role=${employeeRole}&q=${query}`)
-            .then(response => response.json())
-            .then(data => {
-                tableBody.innerHTML = data.html;
-            })
-            .catch(error => {
-                console.error('Error during search:', error);
-                tableBody.innerHTML = '<tr><td colspan="8" class="text-center text-danger">An error occurred.</td></tr>';
-            });
+
+        timeout = setTimeout(function() {
+            fetch(`${searchUrl}?role=${role}&q=${query}`)
+                .then(response => response.json())
+                .then(data => {
+                    tableBody.innerHTML = data.html;
+                    // Re-run after search results are loaded
+                    fetchClientCounts();
+                })
+                .catch(error => console.error('Error during search:', error));
+        }, 300); // Debounce for 300ms
     });
 });
 </script>

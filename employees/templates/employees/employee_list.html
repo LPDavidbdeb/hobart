@@ -54,12 +54,28 @@ $(document).ready(function() {
             $.ajax({
                 url: "{% url 'employees:employee_search_filter_api' %}",
                 data: {
-                    'q': query
+                    'search_query': query // Changed 'q' to 'search_query'
                 },
                 dataType: 'json',
                 success: function(data) {
                     // Replace the table body with the new filtered rows
-                    $('#employee-table-body').html(data.html);
+                    // Assuming data.employees is an array of employee objects
+                    let tableRowsHtml = '';
+                    data.employees.forEach(function(employee) {
+                        tableRowsHtml += `
+                            <tr>
+                                <td>${employee.full_name.split(' ')[0]}</td>
+                                <td>${employee.full_name.split(' ')[1] || ''}</td>
+                                <td>${employee.role}</td>
+                                <td>N/A</td> <!-- Address Status is not in the API response yet -->
+                                <td>
+                                    <a href="${employee.detail_url}" class="btn btn-info btn-sm">View</a>
+                                    <a href="${employee.edit_url}" class="btn btn-primary btn-sm">Edit</a>
+                                </td>
+                            </tr>
+                        `;
+                    });
+                    $('#employee-table-body').html(tableRowsHtml);
                 }
             });
         }, 300); // Wait for 300ms after the user stops typing

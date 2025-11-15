@@ -16,6 +16,9 @@ class EmployeeProfile(models.Model):
         TECHNICIAN = 'TECHNICIAN', 'Technician'
         DISPATCHER = 'DISPATCHER', 'Dispatcher'
 
+    # Add the objects manager explicitly for type hinting/linter
+    objects = models.Manager()
+
     # --- Core Information ---
     user = models.OneToOneField(
         settings.AUTH_USER_MODEL,
@@ -73,3 +76,26 @@ class EmployeeProfile(models.Model):
 
     def get_absolute_url(self):
         return reverse('employees:employee_detail', kwargs={'pk': self.pk})
+
+class TechnicianFSAStaging(models.Model):
+    """A temporary holding area for technician-FSA assignments from a CSV upload."""
+    class Status(models.TextChoices):
+        PENDING = 'PENDING', 'Pending'
+        PROCESSED = 'PROCESSED', 'Processed'
+        ERROR = 'ERROR', 'Error'
+        IGNORED = 'IGNORED', 'Ignored'
+
+    fsa_code = models.CharField(max_length=3, help_text="FSA code from the CSV.")
+    technician_code = models.CharField(max_length=20, help_text="Technician code from the CSV.")
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING, db_index=True)
+    error_message = models.TextField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Technician FSA Staging Record"
+        verbose_name_plural = "Technician FSA Staging Records"
+        ordering = ['created_at']
+
+    def __str__(self):
+        return f"{self.technician_code} - {self.fsa_code} ({self.status})"

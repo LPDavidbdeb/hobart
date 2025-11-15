@@ -1,19 +1,37 @@
-{% for employee in employees %}
+{% for employee in object_list %}
 <tr>
-    <td>{{ employee.user.first_name }}</td>
-    <td>{{ employee.user.last_name }}</td>
-    <td>{{ employee.get_role_display }}</td>
-    <td>
-        {% if employee.address_status %}
-            <span class="badge {{ employee.address_status.badge_class }}">{{ employee.address_status.name }}</span>
+    <td><a href="{{ employee.get_absolute_url }}">{{ employee.user.get_full_name|default:employee.user.username }}</a></td>
+    <td class="text-center">
+        {% if employee.postal_code %}
+            <span class="badge rounded-pill bg-success">Set</span>
+        {% else %}
+            <span class="badge rounded-pill bg-secondary">Not Set</span>
         {% endif %}
     </td>
-    <td>
-        <a href="{% url 'employees:employee_detail' pk=employee.pk %}" class="btn btn-sm btn-info">View Details</a>
+    <td class="text-center">
+        {% if employee.address_status %}
+            <span class="badge {{ employee.address_status.badge_class }}">{{ employee.address_status.name }}</span>
+        {% else %}
+            <span class="badge bg-secondary">N/A</span>
+        {% endif %}
+    </td>
+    <td class="client-count-cell text-end" data-employee-id="{{ employee.pk }}">
+        <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+    </td>
+    <td class="text-center">
+        <a href="{{ employee.get_absolute_url }}" class="btn btn-sm btn-outline-info">View</a>
+        {% if request.user.is_superuser %}
+            <a href="{% url 'employees:edit_employee' pk=employee.pk %}" class="btn btn-sm btn-outline-warning">Edit</a>
+        {% endif %}
+        {% if request.user.is_superuser and employee.role == 'TECHNICIAN' %}
+            <button type="button" class="btn btn-sm btn-outline-danger" data-bs-toggle="modal" data-bs-target="#deleteTechnicianModal-{{ employee.pk }}">
+                Delete
+            </button>
+        {% endif %}
     </td>
 </tr>
 {% empty %}
 <tr>
-    <td colspan="5" class="text-center">No employees found matching your search.</td>
+    <td colspan="5" class="text-center">No employees found.</td>
 </tr>
 {% endfor %}

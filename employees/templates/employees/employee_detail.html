@@ -21,7 +21,14 @@
 
     <div class="d-flex justify-content-between align-items-center">
         <h1>{{ employee.user.get_full_name|default:employee.user.username }}</h1>
-        <span id="total-clients-badge" class="badge bg-primary rounded-pill fs-5" style="display: none;"></span>
+        <div>
+            {% if request.user.is_superuser and employee.role == 'TECHNICIAN' %}
+                <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#promoteTechnicianModal">
+                    Promote to Manager
+                </button>
+            {% endif %}
+            <span id="total-clients-badge" class="badge bg-primary rounded-pill fs-5" style="display: none;"></span>
+        </div>
     </div>
     <p><strong>Role:</strong> {{ employee.get_role_display }}</p>
     <p><strong>Code:</strong> {{ employee.code|default:"N/A" }}</p>
@@ -86,11 +93,65 @@
     {% endif %}
 
 </div>
+
+<!-- Promotion Modal -->
+{% if request.user.is_superuser and employee.role == 'TECHNICIAN' %}
+<div class="modal fade" id="promoteTechnicianModal" tabindex="-1" aria-labelledby="promoteTechnicianModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="promoteTechnicianModalLabel">Promote {{ employee.user.get_full_name }} to Manager</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p>Choose how to handle this technician's current responsibilities.</p>
+                <form id="promotionForm" action="{% url 'employees:promote_technician' employee.pk %}" method="POST">
+                    {% csrf_token %}
+                    
+                    <div class="mb-3">
+                        <input type="radio" class="form-check-input" name="promotion_action" value="assign_successor" id="assign_successor" checked>
+                        <label class="form-check-label" for="assign_successor">
+                            <strong>Assign a successor</strong>
+                        </label>
+                        <p class="form-text">Transfer all of {{ employee.user.get_full_name }}'s FSAs to another technician.</p>
+                        <select class="form-select" name="successor_technician">
+                            {% for tech in successor_technicians %}
+                                <option value="{{ tech.pk }}">{{ tech.user.get_full_name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <hr>
+
+                    <div class="mb-3">
+                        <input type="radio" class="form-check-input" name="promotion_action" value="replace_manager" id="replace_manager">
+                        <label class="form-check-label" for="replace_manager">
+                            <strong>Replace an existing manager</strong>
+                        </label>
+                        <p class="form-text">The new manager will inherit all responsibilities (FSAs, technicians) from an existing manager, who will be deactivated.</p>
+                        <select class="form-select" name="replaced_manager">
+                            {% for manager in replaceable_managers %}
+                                <option value="{{ manager.pk }}">{{ manager.user.get_full_name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="submit" form="promotionForm" class="btn btn-primary">Confirm Promotion</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
 {% endblock %}
 
 {% block scripts %}
 {{ block.super }}
-<script async defer src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBQPRRNJrlMVD_pIMMVwDrg8taBjlg_Oko&callback=initMap"></script>
+<script async defer src="https://maps.googleapis.com/maps/api/js?key={{ GOOGLE_MAPS_API_KEY }}&callback=initMap"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     const mainEmployeeId = {{ employee.pk }};

@@ -1,18 +1,16 @@
 import csv
 import io
 import json
-import re
 from django.shortcuts import render, redirect, get_object_or_404
 from django.urls import reverse
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
-from django.contrib.auth.models import User, Group
+from django.contrib.auth.models import Group
 from django.views.generic import ListView, DetailView
 from django.http import JsonResponse, HttpResponseBadRequest
 from django.db import transaction, IntegrityError
-from django.db.models import Q, Prefetch, Sum
-from django.contrib.gis.db.models.functions import AsGeoJSON # Removed Union
+from django.db.models import Q, Prefetch
 from django.template.loader import render_to_string
 from .models import EmployeeProfile
 from organization.models import Territory
@@ -21,7 +19,7 @@ from client.forms import CsvUploadForm # Corrected import
 from .utils import create_employee
 from address.forms import AddressSearchForm
 from client.models import Client
-from address.models import Address, FSA, PostalCode
+from address.models import FSA, PostalCode
 from django.conf import settings
 import googlemaps
 from django.contrib.gis.geos import Point
@@ -44,16 +42,15 @@ class BaseEmployeeListView(LoginRequiredMixin, UserPassesTestMixin, ListView):
         return self.request.user.is_superuser
 
     def get_queryset(self):
-        # Fetch related user and address in a single query
-        return EmployeeProfile.objects.filter(role=self.role).select_related('user', 'address').order_by('user__first_name')
+        # Fetch related user, address, and postal code in a single query
+        return EmployeeProfile.objects.filter(role=self.role).select_related('user', 'postal_code', 'address_status').order_by('user__first_name')
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['page_title'] = self.page_title
-        context['role_name'] = self.role.label
+        context['role_name'] = self.role.label if self.role else ''
         
         if 'form' not in kwargs and self.form_class:
-            # --- THIS IS THE FIX ---
             # Determine the correct queryset for the 'reports_to' field
             superiors_queryset = EmployeeProfile.objects.none()
             if self.role == EmployeeProfile.Role.MANAGER:
@@ -61,7 +58,6 @@ class BaseEmployeeListView(LoginRequiredMixin, UserPassesTestMixin, ListView):
             elif self.role == EmployeeProfile.Role.TECHNICIAN:
                 superiors_queryset = EmployeeProfile.objects.filter(role=EmployeeProfile.Role.MANAGER)
             
-            # Pass the filtered queryset to the form
             context['form'] = self.form_class(superiors_queryset=superiors_queryset)
             
         return context
@@ -101,11 +97,11 @@ class TechnicianListView(BaseEmployeeListView):
     form_class = TechnicianCreationForm
     page_title = "Technician List"
 
-    def get_queryset(self):
-        # Annotate the queryset with the total number of clients for each technician
-        return super().get_queryset().annotate(
-            total_clients=Sum('responsible_fsas__client_count')
-        )
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        # Provide a list of all technicians for the successor dropdown in the delete modal
+        context['all_technicians'] = EmployeeProfile.objects.filter(role=EmployeeProfile.Role.TECHNICIAN).select_related('user').order_by('user__first_name')
+        return context
 
 # --- Employee List View (All Employees) ---
 class EmployeeListView(ListView):
@@ -177,34 +173,129 @@ class EmployeeDetailView(DetailView):
                 possible_supervisors = possible_supervisors.none()
             context['supervisors'] = possible_supervisors.select_related('user').order_by('user__first_name')
 
+        # --- Data for Promotion Modal ---
+        if employee.role == EmployeeProfile.Role.TECHNICIAN:
+            # Successors are other technicians
+            context['successor_technicians'] = EmployeeProfile.objects.filter(
+                role=EmployeeProfile.Role.TECHNICIAN
+            ).exclude(pk=employee.pk).select_related('user').order_by('user__first_name')
+            # Managers that can be replaced
+            context['replaceable_managers'] = EmployeeProfile.objects.filter(
+                role=EmployeeProfile.Role.MANAGER
+            ).select_related('user').order_by('user__first_name')
+
+        # --- Add other context variables ---
         context['address_search_form'] = AddressSearchForm()
+        context['GOOGLE_MAPS_API_KEY'] = settings.GOOGLE_MAPS_API_KEY
+        
         return context
 
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        employee = self.object
+# --- Promotion and Deletion Views ---
+@login_required
+@user_passes_test(is_admin_or_director)
+@transaction.atomic
+def promote_technician(request, pk):
+    if request.method != 'POST':
+        return HttpResponseBadRequest("Invalid request method.")
 
-        # --- Breadcrumb Trail ---
-        breadcrumbs = []
-        current = employee.reports_to
-        while current:
-            breadcrumbs.append(current)
-            current = current.reports_to
-        context['breadcrumbs'] = reversed(breadcrumbs)
+    technician_to_promote = get_object_or_404(EmployeeProfile, pk=pk, role=EmployeeProfile.Role.TECHNICIAN)
+    action = request.POST.get('promotion_action')
 
-        # --- Supervisor Edit Logic ---
-        if self.request.user.is_superuser:
-            possible_supervisors = EmployeeProfile.objects.exclude(pk=employee.pk)
-            if employee.role == EmployeeProfile.Role.TECHNICIAN:
-                possible_supervisors = possible_supervisors.filter(role=EmployeeProfile.Role.MANAGER)
-            elif employee.role == EmployeeProfile.Role.MANAGER:
-                possible_supervisors = possible_supervisors.filter(role=EmployeeProfile.Role.DIRECTOR)
-            else:
-                possible_supervisors = possible_supervisors.none()
-            context['supervisors'] = possible_supervisors.select_related('user').order_by('user__first_name')
+    try:
+        if action == 'assign_successor':
+            successor_id = request.POST.get('successor_technician')
+            successor = get_object_or_404(EmployeeProfile, pk=successor_id, role=EmployeeProfile.Role.TECHNICIAN)
+            
+            # Transfer FSAs
+            fsas_to_transfer = list(technician_to_promote.responsible_fsas.all())
+            successor.responsible_fsas.add(*fsas_to_transfer)
+            technician_to_promote.responsible_fsas.clear()
+            
+            # Promote the technician
+            technician_to_promote.role = EmployeeProfile.Role.MANAGER
+            technician_to_promote.save()
+            
+            messages.success(request, f"{technician_to_promote.user.get_full_name()} has been promoted to Manager. Their {len(fsas_to_transfer)} FSAs were transferred to {successor.user.get_full_name()}.")
 
-        context['address_search_form'] = AddressSearchForm()
-        return context
+        elif action == 'replace_manager':
+            manager_to_replace_id = request.POST.get('replaced_manager')
+            manager_to_replace = get_object_or_404(EmployeeProfile, pk=manager_to_replace_id, role=EmployeeProfile.Role.MANAGER)
+            
+            # Promote the technician
+            technician_to_promote.role = EmployeeProfile.Role.MANAGER
+            technician_to_promote.reports_to = manager_to_replace.reports_to
+            technician_to_promote.save()
+
+            # Transfer subordinates
+            subordinates_to_transfer = list(manager_to_replace.subordinates.all())
+            for sub in subordinates_to_transfer:
+                sub.reports_to = technician_to_promote
+                sub.save()
+
+            # Transfer territories
+            territories_to_transfer = list(manager_to_replace.territories.all())
+            technician_to_promote.territories.add(*territories_to_transfer)
+            
+            # Deactivate the old manager
+            manager_to_replace.user.is_active = False
+            manager_to_replace.user.save()
+            # Optional: Clear their responsibilities
+            manager_to_replace.subordinates.clear()
+            manager_to_replace.territories.clear()
+            
+            messages.success(request, f"{technician_to_promote.user.get_full_name()} has been promoted and has replaced {manager_to_replace.user.get_full_name()}.")
+
+        else:
+            messages.error(request, "Invalid promotion action specified.")
+            return redirect(technician_to_promote.get_absolute_url())
+
+    except Exception as e:
+        messages.error(request, f"An error occurred during the promotion: {e}")
+        # The transaction.atomic decorator will automatically roll back changes.
+        return redirect(technician_to_promote.get_absolute_url())
+
+    return redirect(technician_to_promote.get_absolute_url())
+
+@login_required
+@user_passes_test(is_admin_or_director)
+@transaction.atomic
+def delete_technician(request, pk):
+    if request.method != 'POST':
+        return HttpResponseBadRequest("Invalid request method.")
+
+    technician_to_delete = get_object_or_404(EmployeeProfile, pk=pk, role=EmployeeProfile.Role.TECHNICIAN)
+    
+    try:
+        # Scenario 1: Direct delete if no FSAs
+        if not technician_to_delete.responsible_fsas.exists():
+            user_full_name = technician_to_delete.user.get_full_name()
+            technician_to_delete.user.delete() # This will cascade and delete the profile
+            messages.success(request, f"Technician '{user_full_name}' had no assigned FSAs and has been deleted.")
+        
+        # Scenario 2: Delete with successor
+        else:
+            successor_id = request.POST.get('successor_technician')
+            if not successor_id:
+                messages.error(request, "A successor was not specified for a technician with active FSAs.")
+                return redirect('employees:technician_list')
+
+            successor = get_object_or_404(EmployeeProfile, pk=successor_id, role=EmployeeProfile.Role.TECHNICIAN)
+            
+            # Transfer FSAs
+            fsas_to_transfer = list(technician_to_delete.responsible_fsas.all())
+            successor.responsible_fsas.add(*fsas_to_transfer)
+            
+            # Delete the old technician
+            user_full_name = technician_to_delete.user.get_full_name()
+            technician_to_delete.user.delete()
+            
+            messages.success(request, f"Technician '{user_full_name}' has been deleted. Their {len(fsas_to_transfer)} FSAs were transferred to {successor.user.get_full_name()}.")
+
+    except Exception as e:
+        messages.error(request, f"An error occurred during the deletion: {e}")
+        # The transaction.atomic decorator will automatically roll back changes.
+    
+    return redirect('employees:technician_list')
 
 # --- CSV Upload Views ---
 @login_required
@@ -333,18 +424,74 @@ def process_employee_csv(file):
 
 # --- APIs for AJAX functionality ---
 @login_required
-def employee_search_and_filter_api(request):
+def employee_role_search_api(request):
+    role = request.GET.get('role', '').upper()
     query = request.GET.get('q', '')
-    queryset = EmployeeProfile.objects.select_related('user').order_by('user__first_name', 'user__last_name')
+
+    if not role:
+        return HttpResponseBadRequest("Role parameter is required.")
+
+    valid_roles = [r[0] for r in EmployeeProfile.Role.choices]
+    if role not in valid_roles:
+        return HttpResponseBadRequest(f"Invalid role specified. Must be one of: {', '.join(valid_roles)}")
+
+    queryset = EmployeeProfile.objects.filter(role=role).select_related('user', 'postal_code', 'address_status').order_by('user__first_name')
+
     if query:
         queryset = queryset.filter(
             Q(user__first_name__icontains=query) |
             Q(user__last_name__icontains=query) |
-            Q(user__username__icontains=query) |
             Q(code__icontains=query)
         )
-    html = render_to_string('employees/_employee_table_rows.html', {'employees': queryset})
+
+    context = {
+        'object_list': queryset,
+        'role_name': role,
+        'request': request
+    }
+    if role == 'TECHNICIAN':
+        context['all_technicians'] = EmployeeProfile.objects.filter(role=EmployeeProfile.Role.TECHNICIAN).select_related('user')
+
+    html = render_to_string('employees/_employee_table_rows.html', context)
     return JsonResponse({'html': html})
+
+@login_required
+def employee_search_filter_api(request):
+    search_query = request.GET.get('search_query', '')
+    role_filter = request.GET.get('role_filter', '')
+
+    employees = EmployeeProfile.objects.select_related('user', 'reports_to__user').order_by('user__first_name', 'user__last_name')
+
+    if search_query:
+        employees = employees.filter(
+            Q(user__first_name__icontains=search_query) |
+            Q(user__last_name__icontains=search_query) |
+            Q(user__email__icontains=search_query) |
+            Q(code__icontains=search_query)
+        )
+
+    if role_filter:
+        # Ensure the role_filter matches one of the EmployeeProfile.Role choices
+        valid_roles = [role.value for role in EmployeeProfile.Role]
+        if role_filter in valid_roles:
+            employees = employees.filter(role=role_filter)
+        else:
+            return JsonResponse({'error': 'Invalid role filter'}, status=400)
+
+    # Prepare data for JSON response
+    employee_data = []
+    for employee in employees:
+        employee_data.append({
+            'id': employee.id,
+            'full_name': employee.user.get_full_name(),
+            'role': employee.get_role_display(),
+            'code': employee.code,
+            'reports_to': employee.reports_to.user.get_full_name() if employee.reports_to else 'N/A',
+            'detail_url': reverse('employees:employee_detail', args=[employee.id]),
+            'edit_url': reverse('employees:edit_employee', args=[employee.id]),
+        })
+
+    return JsonResponse({'employees': employee_data})
 
 @login_required
 def update_employee_field_api(request):
@@ -386,33 +533,22 @@ def client_counts_api(request):
 
     if employee.role == EmployeeProfile.Role.TECHNICIAN:
         fsas = employee.responsible_fsas.all()
-        for fsa in fsas:
-            data['breakdown'].append({"label": fsa.code, "value": fsa.client_count, "id": fsa.pk})
-        data['total_clients'] = sum(item['value'] for item in data['breakdown'])
+        data['total_clients'] = sum(fsa.client_count for fsa in fsas)
 
     elif employee.role == EmployeeProfile.Role.MANAGER:
-        subordinates = employee.subordinates.filter(role=EmployeeProfile.Role.TECHNICIAN).annotate(
-            total_clients_for_tech=Sum('responsible_fsas__client_count')
-        ).select_related('user')
+        subordinates = employee.subordinates.filter(role=EmployeeProfile.Role.TECHNICIAN).prefetch_related('responsible_fsas')
+        total = 0
         for sub in subordinates:
-            data['breakdown'].append({
-                "label": sub.user.get_full_name(),
-                "value": sub.total_clients_for_tech or 0,
-                "id": sub.pk
-            })
-        data['total_clients'] = sum(item['value'] for item in data['breakdown'])
+            total += sum(fsa.client_count for fsa in sub.responsible_fsas.all())
+        data['total_clients'] = total
 
     elif employee.role == EmployeeProfile.Role.DIRECTOR:
-        subordinates = employee.subordinates.filter(role=EmployeeProfile.Role.MANAGER).annotate(
-            total_clients_for_manager=Sum('subordinates__responsible_fsas__client_count')
-        ).select_related('user')
-        for sub in subordinates:
-            data['breakdown'].append({
-                "label": sub.user.get_full_name(),
-                "value": sub.total_clients_for_manager or 0,
-                "id": sub.pk
-            })
-        data['total_clients'] = sum(item['value'] for item in data['breakdown'])
+        managers = employee.subordinates.filter(role=EmployeeProfile.Role.MANAGER).prefetch_related('subordinates__responsible_fsas')
+        total = 0
+        for manager in managers:
+            for tech in manager.subordinates.all():
+                total += sum(fsa.client_count for fsa in tech.responsible_fsas.all())
+        data['total_clients'] = total
 
     return JsonResponse(data)
 
@@ -534,31 +670,6 @@ def fsa_clients_api(request, fsa_code):
         return HttpResponseBadRequest(f"FSA with code '{fsa_code}' not found.")
     except Exception as e:
         return JsonResponse({'error': f'An error occurred fetching clients: {str(e)}'}, status=500)
-
-@login_required
-def employee_role_search_api(request):
-    role = request.GET.get('role', '').upper()
-    query = request.GET.get('q', '')
-
-    if not role:
-        return HttpResponseBadRequest("Role parameter is required.")
-
-    # Validate role against the choices in EmployeeProfile
-    valid_roles = [r[0] for r in EmployeeProfile.Role.choices]
-    if role not in valid_roles:
-        return HttpResponseBadRequest(f"Invalid role specified. Must be one of: {', '.join(valid_roles)}")
-
-    queryset = EmployeeProfile.objects.filter(role=role).select_related('user', 'address').order_by('user__first_name')
-
-    if query:
-        queryset = queryset.filter(
-            Q(user__first_name__icontains=query) |
-            Q(user__last_name__icontains=query) |
-            Q(code__icontains=query)
-        )
-
-    html = render_to_string('employees/_employee_list_rows.html', {'object_list': queryset})
-    return JsonResponse({'html': html})
 
 @login_required
 @user_passes_test(lambda u: u.is_superuser)
