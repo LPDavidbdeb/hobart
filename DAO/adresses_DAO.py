@@ -1,4 +1,5 @@
 import requests
+import re
 from django.conf import settings
 from address.models import Address
 
@@ -64,6 +65,63 @@ class GoogleMapsClient:
             address_obj, created = Address.save_from_google_maps_data(best_result)
             return address_obj
         return None
+
+    def geocode_postal_code(self, postal_code: str):
+        """
+        Geocodes a Canadian postal code.
+        """
+        endpoint = f"{self.base_url}/geocode/json"
+        params = {
+            "address": postal_code,
+            "key": self.api_key,
+            "components": "country:CA|postal_code:" + postal_code,
+        }
+        try:
+            response = self.session.get(endpoint, params=params)
+            response.raise_for_status()
+            return response.json().get("results", [])
+        except requests.exceptions.RequestException as e:
+            print(f"Error during postal code geocoding request: {e}")
+            return []
+
+    def get_directions(self, origin_lat: float, origin_lng: float, dest_lat: float, dest_lng: float):
+        """
+        Gets driving directions and travel metrics between two points using the Routes API.
+        Returns a dictionary with distance_metres, duration_seconds, and the raw response.
+        """
+        endpoint = "https://routes.googleapis.com/directions/v2:computeRoutes"
+        headers = {
+            "Content-Type": "application/json",
+            "X-Goog-Api-Key": self.api_key,
+            "X-Goog-FieldMask": "routes.duration,routes.distanceMeters,routes.polyline.encodedPolyline",
+        }
+        payload = {
+            "origin": {"location": {"latLng": {"latitude": origin_lat, "longitude": origin_lng}}},
+            "destination": {"location": {"latLng": {"latitude": dest_lat, "longitude": dest_lng}}},
+            "travelMode": "DRIVE",
+            "routingPreference": "TRAFFIC_AWARE_OPTIMAL",
+        }
+        try:
+            response = self.session.post(endpoint, json=payload, headers=headers)
+            response.raise_for_status()
+            data = response.json()
+
+            if not data or "routes" not in data or not data["routes"]:
+                return None
+
+            route = data["routes"][0]
+            # Duration is a string like "123s", so we parse the integer value.
+            duration_str = route.get("duration", "0s")
+            duration_seconds = int(re.search(r'\d+', duration_str).group())
+
+            return {
+                "distance_metres": route.get("distanceMeters", 0),
+                "duration_seconds": duration_seconds,
+                "raw_response": data,
+            }
+        except requests.exceptions.RequestException as e:
+            print(f"Error during directions request: {e}")
+            return None
 
     def get_distance_matrix(self, origin_place_ids: list, destination_place_ids: list, mode='driving'):
         endpoint = f"{self.base_url}/distancematrix/json"

@@ -20,6 +20,7 @@ urlpatterns = [
     path('address/', include('address.urls')),
     path('organization/', include('organization.urls')),
     path('core/', include('core.urls')), # core app URLs moved to /core/
+    path('routing/', include('routing.urls')),
 
     # Project-level views
     path('logout/', views.logout_view, name='logout'),

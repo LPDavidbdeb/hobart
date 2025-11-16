@@ -43,6 +43,7 @@ INSTALLED_APPS = [
     'client',  # Added the new client app
     'organization', # Added the organization app
     'core',
+    'routing',
 ]
 
 MIDDLEWARE = [

@@ -21,9 +21,9 @@ from address.forms import AddressSearchForm
 from client.models import Client
 from address.models import FSA, PostalCode
 from django.conf import settings
-import googlemaps
 from django.contrib.gis.geos import Point
 from django.utils import timezone
+from DAO.adresses_DAO import GoogleMapsClient
 
 # --- Permissions --- 
 def is_admin_or_director(user):
@@ -690,11 +690,11 @@ def geocode_and_set_postal_code_api(request):
 
             # If it's a new postal code or doesn't have a location, geocode it
             if created or not postal_code_obj.location:
-                if not hasattr(settings, 'GOOGLE_MAPS_API_KEY') or not settings.GOOGLE_MAPS_API_KEY:
-                    return JsonResponse({'status': 'error', 'message': 'Google Maps API key is not configured.'}, status=500)
-                
-                gmaps = googlemaps.Client(key=settings.GOOGLE_MAPS_API_KEY)
-                geocode_result = gmaps.geocode(f'{postal_code_str}, Canada')
+                try:
+                    gmaps = GoogleMapsClient()
+                    geocode_result = gmaps.geocode_postal_code(postal_code_str)
+                except ValueError as e: # Catches the API key error
+                    return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
 
                 if not geocode_result:
                     return JsonResponse({'status': 'error', 'message': f'Could not geocode postal code: {postal_code_str}'}, status=400)

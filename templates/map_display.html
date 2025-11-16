@@ -4,17 +4,20 @@
 <div id="map" style="height: 60vh; width: 100%;"></div>
 
 <script>
-    function initMap() {
+    async function initMap() {
         const mapDiv = document.getElementById("map");
-        if (!mapDiv || typeof mapLocations === 'undefined' || mapLocations.length === 0) {
+        if (!mapDiv || typeof mapLocations === 'undefined' || (Array.isArray(mapLocations) && mapLocations.length === 0)) {
             if (mapDiv) mapDiv.innerHTML = '<p class="text-center text-muted">Map data is not available.</p>';
             return;
         }
 
+        const { Map } = await google.maps.importLibrary("maps");
+        const { AdvancedMarkerElement } = await google.maps.importLibrary("marker");
+
         const isMulti = Array.isArray(mapLocations);
         const points = isMulti ? mapLocations : [mapLocations];
 
-        const map = new google.maps.Map(mapDiv, {
+        const map = new Map(mapDiv, {
             zoom: 8,
             center: { lat: parseFloat(points[0].lat), lng: parseFloat(points[0].lng) },
             mapId: 'HOBART_PRIMARY_MAP' // A consistent Map ID is required for Advanced Markers
@@ -24,9 +27,20 @@
 
         points.forEach(point => {
             const position = { lat: parseFloat(point.lat), lng: parseFloat(point.lng) };
-            const marker = new google.maps.marker.AdvancedMarkerElement({
+            
+            // Create a simple blue circle for the default marker
+            const markerEl = document.createElement('div');
+            markerEl.style.width = '12px';
+            markerEl.style.height = '12px';
+            markerEl.style.backgroundColor = '#1E90FF'; // DodgerBlue
+            markerEl.style.borderRadius = '50%';
+            markerEl.style.border = '1px solid black';
+
+            new AdvancedMarkerElement({
                 position: position,
                 map: map,
+                title: point.name || 'Location',
+                content: markerEl
             });
             bounds.extend(position);
         });
@@ -40,4 +54,4 @@
     }
 </script>
 
-<script async defer src="https://maps.googleapis.com/maps/api/js?key={{ google_maps_api_key }}&callback=initMap&libraries=map,marker"></script>
+<script async src="https://maps.googleapis.com/maps/api/js?key={{ google_maps_api_key }}&callback=initMap&libraries=marker&v=beta"></script>

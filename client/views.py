@@ -18,7 +18,9 @@ from employees.models import EmployeeProfile
 from address.models import Address, AddressStatus
 from address.forms import AddressSearchForm
 from DAO.adresses_DAO import GoogleMapsClient
-from .utils import update_client_address_from_place_details # Import the new utility function
+from .utils import update_client_address_from_place_details
+from routing.selectors import find_nearby_technicians
+from routing.models import Route
 
 # --- Permissions --- 
 def is_admin_or_director(user):
@@ -49,6 +51,56 @@ class ClientDetailView(LoginRequiredMixin, UserPassesTestMixin, DetailView):
         context['address_search_form'] = AddressSearchForm()
         context['client_address_edit_form'] = ClientAddressEditForm(instance=self.object)
         context['google_maps_api_key'] = os.environ.get('GOOGLE_MAPS_API_KEY')
+
+        if self.object.address and self.object.address.location:
+            nearby_technicians = find_nearby_technicians(customer_address=self.object.address, limit=50)
+            
+            existing_routes = Route.objects.filter(
+                destination_address_id=self.object.address.id,
+                origin_postal_code__in=[tech.postal_code.code for tech in nearby_technicians if tech.postal_code]
+            ).values('origin_postal_code', 'raw_response', 'distance_metres', 'duration_seconds')
+
+            route_map = {route['origin_postal_code']: route for route in existing_routes}
+
+            technician_data_for_template = []
+            technician_data_for_json = []
+
+            for tech in nearby_technicians:
+                if tech.postal_code and tech.postal_code.location:
+                    route_info = route_map.get(tech.postal_code.code)
+                    has_route = route_info is not None
+                    
+                    polyline = None
+                    duration_minutes = None
+                    distance_km = None
+
+                    if has_route:
+                        if route_info['raw_response'] and 'routes' in route_info['raw_response'] and route_info['raw_response']['routes']:
+                            polyline = route_info['raw_response']['routes'][0].get('polyline', {}).get('encodedPolyline')
+                        duration_minutes = round(route_info['duration_seconds'] / 60)
+                        distance_km = round(route_info['distance_metres'] / 1000, 1)
+
+                    # Data for the template rendering
+                    technician_data_for_template.append({
+                        'tech_profile': tech,
+                        'has_route': has_route,
+                        'duration_minutes': duration_minutes,
+                        'distance_km': distance_km,
+                    })
+
+                    # Data for the JavaScript map
+                    technician_data_for_json.append({
+                        'id': tech.id,
+                        'name': tech.user.get_full_name(),
+                        'lat': tech.postal_code.location.y,
+                        'lng': tech.postal_code.location.x,
+                        'distance': round(tech.distance.km, 2) if hasattr(tech, 'distance') else 'N/A',
+                        'has_route': has_route,
+                        'polyline': polyline,
+                    })
+
+            context['nearby_technicians_list'] = technician_data_for_template
+            context['nearby_technicians_json'] = json.dumps(technician_data_for_json)
 
         if self.object.address and self.object.address.raw_response:
             raw_data = self.object.address.raw_response

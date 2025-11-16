@@ -19,6 +19,7 @@ data_backup.json
 *.xml
 *.csv
 *.json
+dump.sql
 
 # Local SDKs and virtual environments
 .venv/
