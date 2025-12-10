@@ -7,7 +7,6 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.views.generic import ListView, View
 from django.contrib import messages
 from django.db.models import Q, Sum, Value
-from shapely.constructive import centroid
 from math import log2
 
 from .models import Address, AddressValidationLog, AddressStatus, FSA
